@@ -1,17 +1,26 @@
 
+import streamlit as st
+import subprocess
+import tempfile
 import os
 
-APP_NAME = "AI Auto Clipper"
+st.set_page_config(page_title="AI Auto Clipper")
 
-def main():
-    print("==============================")
-    print(APP_NAME)
-    print("System is starting...")
-    print("==============================")
+st.title("🎬 AI Auto Clipper")
+st.write("Turn Long Videos Into Short Clips")
 
-    print("Project setup successful!")
-    print("Waiting for authorized video sources.")
+video = st.file_uploader(
+    "Upload Your Video",
+    type=["mp4", "mov", "mkv"]
+)
 
-if __name__ == "__main__":
-    main()
-  
+duration = st.number_input(
+    "Clip Duration (Seconds)",
+    min_value=10,
+    max_value=60,
+    value=30
+)
+
+if video and st.button("Create Clips"):
+    st.info("Video uploaded successfully!")
+    st.write("Selected clip duration:", duration, "seconds")
