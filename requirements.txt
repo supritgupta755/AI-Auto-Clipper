@@ -1,5 +1,4 @@
-
-requests
-python-dotenv
-google-api-python-client
 streamlit
+imageio-ffmpeg
+faster-whisper
+anthropic
