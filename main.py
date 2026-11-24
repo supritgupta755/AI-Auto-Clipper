@@ -98,7 +98,7 @@ def make_ass(words, start, end, vertical, path):
         "OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, "
         "ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, "
         "MarginL, MarginR, MarginV, Encoding\n"
-        f"Style: Default,DejaVu Sans,{size},&H00FFFFFF,&H000000FF,&H00000000,"
+        f"Style: Default,Noto Sans Devanagari,{size},&H00FFFFFF,&H000000FF,&H00000000,"
         f"&H80000000,1,0,0,0,100,100,0,0,1,5,1,2,60,60,{margin},1\n\n"
         "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, "
         "MarginV, Effect, Text\n"
