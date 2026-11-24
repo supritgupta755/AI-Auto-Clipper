@@ -30,18 +30,30 @@ def run(cmd):
     subprocess.run(cmd, check=True, capture_output=True)
 
 
-def transcribe(video_path, folder):
-    wav = os.path.join(folder, "audio.wav")
-    run([FFMPEG, "-y", "-i", video_path, "-vn", "-ac", "1", "-ar", "16000", wav])
-    segments, info = load_whisper().transcribe(
-        wav, language=None, word_timestamps=True
-    )
-    lines, words = [], []
-    for seg in segments:
-        lines.append(f"[{seg.start:.1f}-{seg.end:.1f}] {seg.text.strip()}")
-        for w in seg.words or []:
-            words.append((w.start, w.end, w.word.strip()))
-    return "\n".join(lines), info.duration, words
+def transcribe(video_path, folder, progress=None):
+    # Split long-video audio into 5-minute WAV chunks to reduce peak memory use.
+    chunk_dir = os.path.join(folder, "audio_chunks")
+    os.makedirs(chunk_dir, exist_ok=True)
+    pattern = os.path.join(chunk_dir, "audio_%03d.wav")
+    run([FFMPEG, "-y", "-i", video_path, "-vn", "-ac", "1", "-ar", "16000",
+         "-c:a", "pcm_s16le", "-f", "segment", "-segment_time", "300",
+         "-reset_timestamps", "1", pattern])
+    chunks = sorted(os.path.join(chunk_dir, n) for n in os.listdir(chunk_dir) if n.endswith(".wav"))
+    if not chunks:
+        raise ValueError("Video se audio nahi nikal paya.")
+    lines, words, offset = [], [], 0.0
+    model = load_whisper()
+    for index, wav in enumerate(chunks):
+        segments, info = model.transcribe(wav, language=None, word_timestamps=True)
+        chunk_duration = float(info.duration or 0)
+        for seg in segments:
+            lines.append(f"[{seg.start + offset:.1f}-{seg.end + offset:.1f}] {seg.text.strip()}")
+            for w in seg.words or []:
+                words.append((w.start + offset, w.end + offset, w.word.strip()))
+        offset += chunk_duration
+        if progress is not None:
+            progress.progress((index + 1) / len(chunks), text=f"Audio part {index + 1}/{len(chunks)} complete")
+    return "\n".join(lines), offset, words
 
 
 def pick_clips(transcript, total, count, min_d, max_d):
@@ -178,9 +190,9 @@ def cut_clips(video_path, clips, total, folder, words, captions, vertical,
 
 
 video = st.file_uploader("Upload Your Video", type=["mp4", "mov", "mkv"])
-st.caption("Apni video file upload karein. Bahut badi file upload na ho to pehle 720p me compress karein.")
+st.caption("Apni video file upload karein. Long videos ka audio 5-minute parts me process hoga. Hosting ki upload aur memory limits phir bhi lagu hongi.")
 col1, col2 = st.columns(2)
-count = col1.number_input("Kitne clips?", min_value=1, max_value=10, value=3)
+count = col1.number_input("Kitne clips?", min_value=1, max_value=30, value=15)
 min_d, max_d = col2.slider("Clip length (seconds)", 10, 90, (20, 60))
 captions = st.checkbox("Video ki boli hui language me captions", value=True)
 vertical = st.checkbox("9:16 vertical (Reels/Shorts)", value=True)
@@ -193,8 +205,10 @@ if video is not None and st.button("Create AI Clips"):
                 with open(input_path, "wb") as f:
                     f.write(video.getbuffer())
 
-            with st.spinner("2/3 Video ka transcript ban raha hai..."):
-                transcript, total, words = transcribe(input_path, folder)
+            with st.spinner("2/3 Long video ka audio parts me process ho raha hai..."):
+                audio_progress = st.progress(0, text="Audio processing shuru...")
+                transcript, total, words = transcribe(input_path, folder, audio_progress)
+                audio_progress.empty()
             if not transcript.strip():
                 raise ValueError("Video me bolne wali awaaz nahi mili.")
 
