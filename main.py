@@ -93,9 +93,27 @@ def pick_clips(transcript, total, count, min_d, max_d):
         raise ValueError("Is video me required length ke clips nahi mile. Clip length kam karke try karein.")
 
     chosen.sort()
-    return [{"start": s, "end": e, "title": f"Auto Highlight {i}",
-             "reason": "Free automatic selection based on speech activity"}
-            for i, (s, e) in enumerate(chosen, 1)]
+    output = []
+    for i, (s, e) in enumerate(chosen, 1):
+        snippet_words = [w for rs, re_, ws in rows if rs < e and re_ > s for w in ws]
+        title = " ".join(snippet_words[:8]).strip(" .,!?।") or f"Highlight {i}"
+        output.append({"start": s, "end": e, "title": title[:90],
+                       "reason": "Speech-activity and keyword heuristic; review before publishing"})
+    return output
+
+
+def make_creator_pack(clips, transcript):
+    """Create editable, transcript-based publishing suggestions without a paid API."""
+    clean = re.sub(r"\\s+", " ", transcript).strip()
+    sample = clean[:240]
+    lines = ["AI AUTO CLIPPER - CREATOR PACK", "", "Note: Suggestions are generated from speech text only. Verify facts and edit before publishing.", ""]
+    for i, clip in enumerate(clips, 1):
+        title = clip.get("title") or f"Highlight {i}"
+        lines.extend([f"CLIP {i}", f"Title idea: {title}", f"Hook idea: {title}",
+                      f"Description: A short highlight from the original video. {sample}",
+                      "Hashtags: #shorts #reels #highlights #clips", ""])
+    return "\\n".join(lines)
+
 
 def ass_time(t):
     t = max(0.0, t)
@@ -233,7 +251,9 @@ if video is not None and st.button("Create AI Clips"):
         with zipfile.ZipFile(buf, "w") as z:
             for r in results:
                 z.writestr(r["name"], r["data"])
+            z.writestr("creator_pack.txt", make_creator_pack(results, transcript))
         st.session_state["results"] = results
+        st.session_state["creator_pack"] = make_creator_pack(results, transcript)
         st.session_state["zip"] = buf.getvalue()
 
     except subprocess.CalledProcessError as e:
@@ -251,7 +271,11 @@ if "results" in st.session_state:
             f"Download {r['name']}", r["data"], file_name=r["name"], key=r["name"]
         )
     st.download_button(
-        "Download All Clips", st.session_state["zip"], file_name="AI_Clips.zip"
+        "Download All Clips + Creator Pack", st.session_state["zip"], file_name="AI_Clips_and_Creator_Pack.zip"
+    )
+    st.download_button(
+        "Download Titles, Hooks, Descriptions & Hashtags",
+        st.session_state["creator_pack"], file_name="creator_pack.txt"
     )
     
 
