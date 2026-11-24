@@ -17,6 +17,7 @@ CLAUDE_MODEL = "claude-sonnet-5-5"
 st.set_page_config(page_title="AI Auto Clipper")
 st.title("🎬 AI Auto Clipper")
 st.write("Long video upload karo. AI khud best clips chunega aur kaat dega.")
+st.caption("Speech language auto-detect hoti hai. AI highlight selection ke liye Anthropic API key zaroori hai.")
 
 
 @st.cache_resource
@@ -42,7 +43,7 @@ def transcribe(video_path, folder):
     wav = os.path.join(folder, "audio.wav")
     run([FFMPEG, "-y", "-i", video_path, "-vn", "-ac", "1", "-ar", "16000", wav])
     segments, info = load_whisper().transcribe(
-        wav, language="en", word_timestamps=True
+        wav, language=None, word_timestamps=True
     )
     lines, words = [], []
     for seg in segments:
