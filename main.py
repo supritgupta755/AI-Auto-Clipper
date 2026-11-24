@@ -8,7 +8,6 @@ import zipfile
 
 import imageio_ffmpeg
 import streamlit as st
-from anthropic import Anthropic
 from faster_whisper import WhisperModel
 
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
@@ -17,7 +16,7 @@ CLAUDE_MODEL = "claude-sonnet-5-5"
 st.set_page_config(page_title="AI Auto Clipper")
 st.title("🎬 AI Auto Clipper")
 st.write("Long video upload karo. AI khud best clips chunega aur kaat dega.")
-st.caption("Speech language auto-detect hoti hai. AI highlight selection ke liye Anthropic API key zaroori hai.")
+st.caption("Free mode: speech auto-detect, automatic highlight selection, captions aur clips. API key ki zaroorat nahi.")
 
 
 @st.cache_resource
@@ -25,18 +24,6 @@ def load_whisper():
     return WhisperModel("base", device="cpu", compute_type="int8")
 
 
-def get_api_key():
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if key:
-        return key
-    try:
-        key = st.secrets["ANTHROPIC_API_KEY"]
-        if key:
-            return key
-    except Exception:
-        pass
-    return st.sidebar.text_input("Anthropic API Key", type="password",
-                                 help="Key yahan sirf app me daalein, chat me nahi.")
 
 
 def run(cmd):
@@ -57,35 +44,45 @@ def transcribe(video_path, folder):
     return "\n".join(lines), info.duration, words
 
 
-def pick_clips(api_key, transcript, count, min_d, max_d):
-    client = Anthropic(api_key=api_key)
-    prompt = f"""Neeche ek video ka transcript hai, har line ke saath [start-end] seconds me.
-Is video me se {count} sabse achhe, engaging, self-contained clips chuno
-(hook, emotion, funny moment, ya useful insight wale hisse).
+def pick_clips(transcript, total, count, min_d, max_d):
+    """Free local highlight scoring; no paid API call."""
+    rows = []
+    for line in transcript.splitlines():
+        match = re.match(r"\[(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)\]\s*(.*)", line)
+        if match:
+            start, end = float(match.group(1)), float(match.group(2))
+            words = match.group(3).lower().split()
+            rows.append((start, end, words))
 
-Rules:
-- Har clip {min_d} se {max_d} second ka ho.
-- Clips overlap na karein.
-- Start/end transcript ke timestamps ke aas-paas ho, baat beech me na kate.
-- SIRF JSON array do, aur kuch nahi. Format:
-[{{"start": 12.0, "end": 45.5, "title": "short title", "reason": "ek line me kyun achha hai"}}]
+    duration = min(max_d, max(min_d, 30))
+    candidates = []
+    triggers = {"लेकिन", "क्योंकि", "सोचिए", "ध्यान", "जरूरी", "खास", "मतलब",
+                "amazing", "important", "secret", "best", "problem", "solution",
+                "कैसे", "क्यों", "देखिए", "सुनिए"}
+    for start, _, _ in rows:
+        end = min(total, start + duration)
+        if end - start < min_d:
+            continue
+        selected = [w for s, e, ws in rows if s < end and e > start for w in ws]
+        if not selected:
+            continue
+        score = len(selected) + 3 * sum(1 for w in selected if w.strip(".,!?") in triggers)
+        candidates.append((score, start, end))
 
-Transcript:
-{transcript}"""
-    msg = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=1500,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    text = "".join(b.text for b in msg.content if b.type == "text")
-    match = re.search(r"\[.*\]", text, re.S)
-    if not match:
-        raise ValueError("AI ne sahi JSON nahi diya. Dobara try karo.")
-    clips = json.loads(match.group(0))
-    if not isinstance(clips, list):
-        raise ValueError("AI response list format me nahi hai.")
-    return clips
+    candidates.sort(reverse=True)
+    chosen = []
+    for score, start, end in candidates:
+        if all(end <= old_start or start >= old_end for old_start, old_end in chosen):
+            chosen.append((start, end))
+        if len(chosen) >= int(count):
+            break
+    if not chosen:
+        raise ValueError("Is video me required length ke clips nahi mile. Clip length kam karke try karein.")
 
+    chosen.sort()
+    return [{"start": s, "end": e, "title": f"Auto Highlight {i}",
+             "reason": "Free automatic selection based on speech activity"}
+            for i, (s, e) in enumerate(chosen, 1)]
 
 def ass_time(t):
     t = max(0.0, t)
@@ -186,13 +183,8 @@ count = col1.number_input("Kitne clips?", min_value=1, max_value=10, value=3)
 min_d, max_d = col2.slider("Clip length (seconds)", 10, 90, (20, 60))
 captions = st.checkbox("Video ki boli hui language me captions", value=True)
 vertical = st.checkbox("9:16 vertical (Reels/Shorts)", value=True)
-api_key = get_api_key()
-
 if video and st.button("Create AI Clips"):
-    if not api_key:
-        st.error("Anthropic API Key daalo (sidebar me ya Secrets me).")
-    else:
-        try:
+    try:
             with tempfile.TemporaryDirectory() as folder:
                 input_path = os.path.join(folder, "input.mp4")
                 with open(input_path, "wb") as f:
@@ -204,7 +196,7 @@ if video and st.button("Create AI Clips"):
                     raise ValueError("Video me bolne wali awaaz nahi mili.")
 
                 with st.spinner("2/3 AI best clips chun raha hai..."):
-                    picks = pick_clips(api_key, transcript, count, min_d, max_d)
+                    picks = pick_clips(transcript, total, count, min_d, max_d)
 
                 with st.spinner("3/3 Clips kaat raha hoon..."):
                     results = cut_clips(
@@ -222,10 +214,10 @@ if video and st.button("Create AI Clips"):
             st.session_state["results"] = results
             st.session_state["zip"] = buf.getvalue()
 
-        except subprocess.CalledProcessError as e:
-            st.error("FFmpeg error: " + e.stderr.decode(errors="ignore")[-500:])
-        except Exception as e:
-            st.error(f"Error: {e}")
+    except subprocess.CalledProcessError as e:
+        st.error("FFmpeg error: " + e.stderr.decode(errors="ignore")[-500:])
+    except Exception as e:
+        st.error(f"Error: {e}")
 
 # Results session_state me rakhe hain taaki download dabane par gayab na ho
 if "results" in st.session_state:
