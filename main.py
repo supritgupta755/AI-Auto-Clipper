@@ -30,9 +30,13 @@ def get_api_key():
     if key:
         return key
     try:
-        return st.secrets["ANTHROPIC_API_KEY"]
+        key = st.secrets["ANTHROPIC_API_KEY"]
+        if key:
+            return key
     except Exception:
-        return st.sidebar.text_input("Anthropic API Key", type="password")
+        pass
+    return st.sidebar.text_input("Anthropic API Key", type="password",
+                                 help="Key yahan sirf app me daalein, chat me nahi.")
 
 
 def run(cmd):
@@ -77,7 +81,10 @@ Transcript:
     match = re.search(r"\[.*\]", text, re.S)
     if not match:
         raise ValueError("AI ne sahi JSON nahi diya. Dobara try karo.")
-    return json.loads(match.group(0))
+    clips = json.loads(match.group(0))
+    if not isinstance(clips, list):
+        raise ValueError("AI response list format me nahi hai.")
+    return clips
 
 
 def ass_time(t):
@@ -116,13 +123,31 @@ def make_ass(words, start, end, vertical, path):
     return bool(lines)
 
 
-def cut_clips(video_path, clips, total, folder, words, captions, vertical):
+def cut_clips(video_path, clips, total, folder, words, captions, vertical,
+              min_d, max_d, count):
     results = []
-    for i, c in enumerate(clips, 1):
-        start = max(0.0, float(c["start"]))
-        end = min(float(total), float(c["end"]))
-        if end - start < 3:
+    clean_clips = []
+    for c in clips:
+        try:
+            start, end = float(c["start"]), float(c["end"])
+            if (0 <= start < end <= total and
+                    min_d <= end - start <= max_d):
+                clean_clips.append((start, end, c))
+        except (KeyError, TypeError, ValueError):
             continue
+    clean_clips.sort(key=lambda item: item[0])
+    non_overlapping = []
+    last_end = -1.0
+    for start, end, c in clean_clips:
+        if start >= last_end:
+            non_overlapping.append((start, end, c))
+            last_end = end
+        if len(non_overlapping) >= count:
+            break
+    if not non_overlapping:
+        raise ValueError("AI ke chuney clips duration/timestamp rules se match nahi hue. Dobara try karein.")
+
+    for i, (start, end, c) in enumerate(non_overlapping, 1):
         name = f"clip_{i:02d}.mp4"
         filters = []
         if vertical:
@@ -159,11 +184,11 @@ video = st.file_uploader("Upload Your Video", type=["mp4", "mov", "mkv"])
 col1, col2 = st.columns(2)
 count = col1.number_input("Kitne clips?", min_value=1, max_value=10, value=3)
 min_d, max_d = col2.slider("Clip length (seconds)", 10, 90, (20, 60))
-captions = st.checkbox("English captions lagao", value=True)
+captions = st.checkbox("Video ki boli hui language me captions", value=True)
 vertical = st.checkbox("9:16 vertical (Reels/Shorts)", value=True)
+api_key = get_api_key()
 
 if video and st.button("Create AI Clips"):
-    api_key = get_api_key()
     if not api_key:
         st.error("Anthropic API Key daalo (sidebar me ya Secrets me).")
     else:
@@ -183,7 +208,8 @@ if video and st.button("Create AI Clips"):
 
                 with st.spinner("3/3 Clips kaat raha hoon..."):
                     results = cut_clips(
-                        input_path, picks, total, folder, words, captions, vertical
+                        input_path, picks, total, folder, words, captions, vertical,
+                        min_d, max_d, int(count)
                     )
 
             if not results:
