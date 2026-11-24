@@ -46,6 +46,7 @@ def download_youtube_video(url, folder):
     options = {
         "format": "bv*+ba/b",
         "merge_output_format": "mp4",
+        "ffmpeg_location": FFMPEG,
         "outtmpl": os.path.join(folder, "source.%(ext)s"),
         "noplaylist": True,
         "quiet": True,
