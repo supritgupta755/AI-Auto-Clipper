@@ -3,19 +3,23 @@ import json
 import os
 import re
 import subprocess
+import glob
+import shutil
+from urllib.parse import urlparse
 import tempfile
 import zipfile
 
 import imageio_ffmpeg
 import streamlit as st
 from faster_whisper import WhisperModel
+import yt_dlp
 
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 CLAUDE_MODEL = "claude-sonnet-5-5"
 
 st.set_page_config(page_title="AI Auto Clipper")
 st.title("🎬 AI Auto Clipper")
-st.write("Long video upload karo. AI khud best clips chunega aur kaat dega.")
+st.write("YouTube link paste karo. App highlights chun kar short clips banayega.")
 st.caption("Free mode: speech auto-detect, automatic highlight selection, captions aur clips. API key ki zaroorat nahi.")
 
 
@@ -28,6 +32,39 @@ def load_whisper():
 
 def run(cmd):
     subprocess.run(cmd, check=True, capture_output=True)
+
+
+def download_youtube_video(url, folder):
+    """Download a publicly accessible YouTube video the user owns or has permission to use."""
+    parsed = urlparse(url.strip())
+    host = (parsed.hostname or "").lower()
+    if host not in {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be", "www.youtu.be"}:
+        raise ValueError("Abhi sirf YouTube video link support hai.")
+    if parsed.path == "/playlist" or "list=" in parsed.query:
+        raise ValueError("Playlist link nahi; ek single video ka link paste karein.")
+
+    options = {
+        "format": "bv*+ba/b",
+        "merge_output_format": "mp4",
+        "outtmpl": os.path.join(folder, "source.%(ext)s"),
+        "noplaylist": True,
+        "quiet": True,
+        "no_warnings": True,
+        "restrictfilenames": True,
+    }
+    with yt_dlp.YoutubeDL(options) as ydl:
+        info = ydl.extract_info(url.strip(), download=True)
+        duration = info.get("duration")
+        if duration and duration > 4 * 60 * 60:
+            raise ValueError("Abhi 4 ghante se lambi video support nahi hai.")
+    candidates = glob.glob(os.path.join(folder, "source.*"))
+    candidates = [p for p in candidates if not p.endswith((".part", ".ytdl"))]
+    if not candidates:
+        raise ValueError("YouTube se video download nahi hui. Link public aur accessible hona chahiye.")
+    source = max(candidates, key=os.path.getsize)
+    target = os.path.join(folder, "input.mp4")
+    shutil.move(source, target)
+    return target
 
 
 def transcribe(video_path, folder):
@@ -177,25 +214,25 @@ def cut_clips(video_path, clips, total, folder, words, captions, vertical,
     return results
 
 
-video = st.file_uploader("Upload Your Video", type=["mp4", "mov", "mkv"])
+video_url = st.text_input("YouTube Video Link", placeholder="https://www.youtube.com/watch?v=...")
+st.caption("Sirf apne ya permission wale public videos ka link use karein. Private, members-only ya restricted videos support nahi hain.")
 col1, col2 = st.columns(2)
 count = col1.number_input("Kitne clips?", min_value=1, max_value=10, value=3)
 min_d, max_d = col2.slider("Clip length (seconds)", 10, 90, (20, 60))
 captions = st.checkbox("Video ki boli hui language me captions", value=True)
 vertical = st.checkbox("9:16 vertical (Reels/Shorts)", value=True)
-if video and st.button("Create AI Clips"):
+if video_url.strip() and st.button("Create Clips from YouTube"):
     try:
             with tempfile.TemporaryDirectory() as folder:
-                input_path = os.path.join(folder, "input.mp4")
-                with open(input_path, "wb") as f:
-                    f.write(video.getbuffer())
+                with st.spinner("1/4 YouTube video download ho raha hai..."):
+                    input_path = download_youtube_video(video_url, folder)
 
-                with st.spinner("1/3 Video sun raha hoon (transcript)..."):
+                with st.spinner("2/4 Video ka transcript ban raha hai..."):
                     transcript, total, words = transcribe(input_path, folder)
                 if not transcript.strip():
                     raise ValueError("Video me bolne wali awaaz nahi mili.")
 
-                with st.spinner("2/3 AI best clips chun raha hai..."):
+                with st.spinner("3/4 Automatic highlights chun raha hai..."):
                     picks = pick_clips(transcript, total, count, min_d, max_d)
 
                 with st.spinner("3/3 Clips kaat raha hoon..."):
