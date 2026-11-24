@@ -11,8 +11,6 @@ import streamlit as st
 from faster_whisper import WhisperModel
 
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
-CLAUDE_MODEL = "claude-sonnet-5-5"
-
 st.set_page_config(page_title="AI Auto Clipper")
 st.title("🎬 AI Auto Clipper")
 st.write("Apni video upload karo. App speech ke basis par highlights chun kar short clips banayega.")
@@ -66,7 +64,8 @@ def pick_clips(transcript, total, count, min_d, max_d):
             words = match.group(3).lower().split()
             rows.append((start, end, words))
 
-    duration = min(max_d, max(min_d, 30))
+    # Respect the user's selected minimum and maximum clip duration.
+    duration = (float(min_d) + float(max_d)) / 2
     candidates = []
     triggers = {"लेकिन", "क्योंकि", "सोचिए", "ध्यान", "जरूरी", "खास", "मतलब",
                 "कैसे", "क्यों", "देखिए", "सुनिए", "हाहा", "हंसी", "मजाक",
@@ -192,7 +191,7 @@ def cut_clips(video_path, clips, total, folder, words, captions, vertical,
 
 
 video = st.file_uploader("Upload Your Video", type=["mp4", "mov", "mkv"])
-st.caption("Apni video file upload karein. Long videos ka audio 5-minute parts me process hoga. Hosting ki upload aur memory limits phir bhi lagu hongi.")
+st.caption("Apni video file upload karein. Long videos ka audio 5-minute parts me process hoga. 2–3 ghante ki high-quality file ko hosting ki upload, RAM, CPU aur time limits rok sakti hain.")
 col1, col2 = st.columns(2)
 count = col1.number_input("Kitne clips?", min_value=1, max_value=30, value=15)
 min_d, max_d = col2.slider("Clip length (seconds)", 10, 90, (20, 60))
@@ -203,9 +202,15 @@ if video is not None and st.button("Create AI Clips"):
     try:
         with tempfile.TemporaryDirectory() as folder:
             input_path = os.path.join(folder, "input.mp4")
-            with st.spinner("1/3 Video process ho raha hai..."):
-                with open(input_path, "wb") as f:
-                    f.write(video.getbuffer())
+            with st.spinner("1/3 Video file save ho rahi hai..."):
+                # Avoid creating an additional full-size bytes copy while saving uploads.
+                video.seek(0)
+                with open(input_path, "wb") as output_file:
+                    while True:
+                        chunk = video.read(8 * 1024 * 1024)
+                        if not chunk:
+                            break
+                        output_file.write(chunk)
 
             with st.spinner("2/3 Long video ka audio parts me process ho raha hai..."):
                 audio_progress = st.progress(0, text="Audio processing shuru...")
