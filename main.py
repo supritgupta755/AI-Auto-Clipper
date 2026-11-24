@@ -69,8 +69,10 @@ def pick_clips(transcript, total, count, min_d, max_d):
     duration = min(max_d, max(min_d, 30))
     candidates = []
     triggers = {"लेकिन", "क्योंकि", "सोचिए", "ध्यान", "जरूरी", "खास", "मतलब",
-                "amazing", "important", "secret", "best", "problem", "solution",
-                "कैसे", "क्यों", "देखिए", "सुनिए"}
+                "कैसे", "क्यों", "देखिए", "सुनिए", "हाहा", "हंसी", "मजाक",
+                "जोक", "कमाल", "अरे", "वाह", "funny", "haha", "hahaha",
+                "laugh", "joke", "crazy", "amazing", "seriously", "shocking",
+                "unexpected", "oops", "wait", "what"}
     for start, _, _ in rows:
         end = min(total, start + duration)
         if end - start < min_d:
@@ -78,7 +80,7 @@ def pick_clips(transcript, total, count, min_d, max_d):
         selected = [w for s, e, ws in rows if s < end and e > start for w in ws]
         if not selected:
             continue
-        score = len(selected) + 3 * sum(1 for w in selected if w.strip(".,!?") in triggers)
+        score = len(selected) + 6 * sum(1 for w in selected if w.strip(".,!?।") in triggers)
         candidates.append((score, start, end))
 
     candidates.sort(reverse=True)
