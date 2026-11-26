@@ -153,17 +153,32 @@ def pick_clips(transcript, total, count, min_d, max_d, sensitivity=1.0):
 
 
 def make_creator_pack(clips, transcript):
-    """Create editable, transcript-based publishing suggestions without a paid API."""
-    clean = re.sub(r"\s+", " ", transcript).strip()
-    sample = clean[:240]
-    lines = ["AI AUTO CLIPPER - CREATOR PACK", "", "Note: Suggestions are generated from speech text only. Verify facts and edit before publishing.", ""]
+    """Create clip-specific, editable publishing suggestions from transcript timestamps."""
+    transcript_rows = []
+    for line in transcript.splitlines():
+        match = re.match(r"\[(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)\]\s*(.*)", line)
+        if match and match.group(3).strip():
+            transcript_rows.append((float(match.group(1)), float(match.group(2)), match.group(3).strip()))
+
+    lines = [
+        "AI AUTO CLIPPER - CREATOR PACK", "",
+        "Note: Suggestions use speech text only, not visual AI. Verify facts and edit before publishing.", ""
+    ]
     for i, clip in enumerate(clips, 1):
         title = clip.get("title") or f"Highlight {i}"
-        lines.extend([f"CLIP {i}", f"Title idea: {title}", f"Hook idea: {title}",
-                      f"Description: A short highlight from the original video. {sample}",
-                      "Hashtags: #shorts #reels #highlights #clips", ""])
+        start, end = float(clip.get("start", 0)), float(clip.get("end", 0))
+        clip_text = " ".join(text for row_start, row_end, text in transcript_rows
+                             if row_start < end and row_end > start)
+        clip_text = re.sub(r"\s+", " ", clip_text).strip() or title
+        hook = clip_text[:110].rstrip(" .,!?") or title
+        description = clip_text[:240]
+        lines.extend([
+            f"CLIP {i}", f"Title idea: {title}",
+            f"Hook idea: {hook}",
+            f"Description: A short highlight from the original video. {description}",
+            "Hashtags: #shorts #reels #highlights #clips", ""
+        ])
     return "\n".join(lines)
-
 
 def ass_time(t):
     t = max(0.0, t)
@@ -392,6 +407,10 @@ correction_text = st.text_area(
 )
 
 if video is not None and st.button("Create Professional Edit" if mode == "Short video → Professional Edit" else "Create AI Clips"):
+    st.session_state.pop("short_edit", None)
+    st.session_state.pop("results", None)
+    st.session_state.pop("creator_pack", None)
+    st.session_state.pop("zip", None)
     results = []
     try:
         with tempfile.TemporaryDirectory() as folder:
@@ -454,6 +473,8 @@ if video is not None and st.button("Create Professional Edit" if mode == "Short 
                         aspect_ratio=aspect_ratio_value, quality=quality
                     )
                     clip_progress.empty()
+                    if len(results) < int(count):
+                        st.warning(f"Sirf {len(results)} clips mil paaye; requested {int(count)}. Behtar results ke liye clip duration kam karein ya longer video dein.")
 
         if mode == "Long video → Auto Clips" and not results:
             raise ValueError("Koi clip nahi bani.")
