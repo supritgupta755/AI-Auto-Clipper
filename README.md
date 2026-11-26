@@ -4,7 +4,7 @@ A Streamlit app that creates short clips from a user-uploaded video.
 
 ## Current features
 1. Upload MP4, MOV, or MKV video files.
-2. Transcribe speech with Faster-Whisper using automatic language detection.
+2. Transcribe speech with Faster-Whisper using automatic language detection and selectable tiny (fast), base (balanced), or small (slower, potentially more accurate) models.
 3. Split extracted audio into 5-minute chunks to reduce peak audio-processing memory.
 4. Select candidate highlights using free transcript-based speech and keyword scoring.
 5. Cut clips with FFmpeg, optionally add word-timed captions, crop to vertical 9:16, and download clips or a ZIP.
