@@ -65,8 +65,8 @@ def apply_word_corrections(transcript, words, correction_text):
         if wrong and right:
             pairs.append((wrong, right))
     for wrong, right in pairs:
-        transcript = transcript.replace(wrong, right).replace(wrong.lower(), right)
-        words = [(s, e, word.replace(wrong, right).replace(wrong.lower(), right))
+        transcript = re.sub(re.escape(wrong), lambda _: right, transcript, flags=re.IGNORECASE)
+        words = [(s, e, re.sub(re.escape(wrong), lambda _: right, word, flags=re.IGNORECASE))
                  for s, e, word in words]
     return transcript, words
 
@@ -345,6 +345,7 @@ if video is not None and st.button("Create Professional Edit" if mode == "Short 
                 )
                 st.session_state.pop("results", None)
             else:
+                st.session_state.pop("short_edit", None)
                 with st.spinner("2/3 Long video ka audio parts me process ho raha hai..."):
                     audio_progress = st.progress(0, text="Audio processing shuru...")
                     transcript, total, words = transcribe(input_path, folder, audio_progress)
