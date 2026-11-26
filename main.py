@@ -78,37 +78,55 @@ def apply_word_corrections(transcript, words, correction_text):
 
 
 def pick_clips(transcript, total, count, min_d, max_d, sensitivity=1.0):
-    """Free local highlight scoring; no paid API call."""
+    """Choose varied, non-overlapping speech highlights within the requested duration range."""
     rows = []
     for line in transcript.splitlines():
-        match = re.match(r"\[(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)\]\s*(.*)", line)
+        match = re.match(r"\\[(\\d+(?:\\.\\d+)?)-(\\d+(?:\\.\\d+)?)\\]\\s*(.*)", line)
         if match:
             start, end = float(match.group(1)), float(match.group(2))
             words = match.group(3).lower().split()
-            rows.append((start, end, words))
+            if end > start and words:
+                rows.append((start, end, words))
 
-    # Respect the user's selected minimum and maximum clip duration.
-    duration = (float(min_d) + float(max_d)) / 2
+    if not rows:
+        raise ValueError("Is video me required length ke clips nahi mile. Clip length kam karke try karein.")
+
+    min_d, max_d = float(min_d), float(max_d)
+    if min_d <= 0 or max_d < min_d:
+        raise ValueError("Clip length range sahi nahi hai.")
+    midpoint = (min_d + max_d) / 2
+    durations = sorted({min_d, midpoint, max_d})
+    triggers = {
+        "लेकिन", "क्योंकि", "सोचिए", "ध्यान", "जरूरी", "खास", "मतलब",
+        "कैसे", "क्यों", "देखिए", "सुनिए", "हाहा", "हंसी", "मजाक",
+        "जोक", "कमाल", "अरे", "वाह", "funny", "haha", "hahaha",
+        "laugh", "joke", "crazy", "amazing", "seriously", "shocking",
+        "unexpected", "oops", "wait", "what"
+    }
+    emphasis = max(0.0, float(sensitivity))
     candidates = []
-    triggers = {"लेकिन", "क्योंकि", "सोचिए", "ध्यान", "जरूरी", "खास", "मतलब",
-                "कैसे", "क्यों", "देखिए", "सुनिए", "हाहा", "हंसी", "मजाक",
-                "जोक", "कमाल", "अरे", "वाह", "funny", "haha", "hahaha",
-                "laugh", "joke", "crazy", "amazing", "seriously", "shocking",
-                "unexpected", "oops", "wait", "what"}
+    seen = set()
     for start, _, _ in rows:
-        end = min(total, start + duration)
-        if end - start < min_d:
-            continue
-        selected = [w for s, e, ws in rows if s < end and e > start for w in ws]
-        if not selected:
-            continue
-        trigger_count = sum(1 for w in selected if w.strip(".,!?।").lower() in triggers)
-        reaction_bonus = sum(1 for token in ("!", "?", "।") if token in " ".join(selected))
-        emphasis = float(sensitivity)
-        score = len(selected) + 6 * emphasis * trigger_count + 1.5 * emphasis * reaction_bonus
-        candidates.append((score, start, end))
+        for requested_duration in durations:
+            end = min(float(total), start + requested_duration)
+            actual_duration = end - start
+            if actual_duration + 0.01 < min_d or actual_duration > max_d + 0.01:
+                continue
+            key = (round(start, 2), round(end, 2))
+            if key in seen:
+                continue
+            seen.add(key)
+            selected = [w for rs, re_, ws in rows if rs < end and re_ > start for w in ws]
+            if not selected:
+                continue
+            trigger_count = sum(1 for w in selected if w.strip(".,!?।").lower() in triggers)
+            punctuation_text = " ".join(w for rs, re_, ws in rows if rs < end and re_ > start for w in ws)
+            reaction_bonus = sum(punctuation_text.count(mark) for mark in ("!", "?", "।"))
+            density = len(selected) / actual_duration
+            score = density * 60 + 4.0 * emphasis * trigger_count + 0.5 * emphasis * reaction_bonus
+            candidates.append((score, start, end))
 
-    candidates.sort(reverse=True)
+    candidates.sort(key=lambda item: (item[0], item[2] - item[1]), reverse=True)
     chosen = []
     for score, start, end in candidates:
         if all(end <= old_start or start >= old_end for old_start, old_end in chosen):
@@ -123,8 +141,10 @@ def pick_clips(transcript, total, count, min_d, max_d, sensitivity=1.0):
     for i, (s, e) in enumerate(chosen, 1):
         snippet_words = [w for rs, re_, ws in rows if rs < e and re_ > s for w in ws]
         title = " ".join(snippet_words[:8]).strip(" .,!?।") or f"Highlight {i}"
-        output.append({"start": s, "end": e, "title": title[:90],
-                       "reason": "Speech-activity and keyword heuristic; review before publishing"})
+        output.append({
+            "start": s, "end": e, "title": title[:90],
+            "reason": "Speech density and keyword heuristic; review before publishing"
+        })
     return output
 
 
