@@ -77,7 +77,7 @@ def apply_word_corrections(transcript, words, correction_text):
     return transcript, words
 
 
-def pick_clips(transcript, total, count, min_d, max_d):
+def pick_clips(transcript, total, count, min_d, max_d, sensitivity=1.0):
     """Free local highlight scoring; no paid API call."""
     rows = []
     for line in transcript.splitlines():
@@ -102,7 +102,9 @@ def pick_clips(transcript, total, count, min_d, max_d):
         selected = [w for s, e, ws in rows if s < end and e > start for w in ws]
         if not selected:
             continue
-        score = len(selected) + 6 * sum(1 for w in selected if w.strip(".,!?।") in triggers)
+        trigger_count = sum(1 for w in selected if w.strip(".,!?।").lower() in triggers)
+        reaction_bonus = sum(1 for token in ("!", "?", "।") if token in " ".join(selected))
+        score = (len(selected) + 6 * trigger_count + 1.5 * reaction_bonus) * float(sensitivity)
         candidates.append((score, start, end))
 
     candidates.sort(reverse=True)
@@ -180,7 +182,8 @@ def make_ass(words, start, end, vertical, path):
 
 
 def edit_short_video(input_path, folder, words, captions, vertical,
-                     music_path=None, fade=True, color_preset="Natural"):
+                     music_path=None, fade=True, color_preset="Natural",
+                     aspect_ratio="9:16", quality="Balanced"):
     """Apply practical short-form polish using FFmpeg; no paid API required."""
     probe = subprocess.run([FFMPEG, "-i", input_path], capture_output=True, text=True)
     match = re.search(r"Duration: (\d+):(\d+):(\d+(?:\.\d+)?)", probe.stderr)
@@ -189,7 +192,11 @@ def edit_short_video(input_path, folder, words, captions, vertical,
     hh, mm, ss = match.groups()
     duration = int(hh) * 3600 + int(mm) * 60 + float(ss)
     filters = []
-    if vertical:
+    if aspect_ratio == "1:1":
+        filters.append("crop='min(iw,ih)':'min(iw,ih)',scale=1080:1080")
+    elif aspect_ratio == "16:9":
+        filters.append("crop='min(iw,ih*16/9)':'min(ih,iw*9/16)',scale=1280:720")
+    elif vertical:
         filters.append("crop='min(iw,ih*9/16)':'min(ih,iw*16/9)',scale=720:1280")
     else:
         filters.append("scale='min(1280,iw)':-2")
@@ -239,7 +246,10 @@ def edit_short_video(input_path, folder, words, captions, vertical,
         cmd += ["-af", audio_filter]
     else:
         cmd += ["-an"]
-    cmd += ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", "-threads", "2",
+    preset, crf = {"Fast": ("ultrafast", "28"),
+                   "Balanced": ("veryfast", "24"),
+                   "High quality": ("fast", "20")}.get(quality, ("veryfast", "24"))
+    cmd += ["-c:v", "libx264", "-preset", preset, "-crf", crf, "-threads", "2",
             "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart",
             "professionally_edited_short.mp4"]
     subprocess.run(cmd, check=True, capture_output=True, cwd=folder)
@@ -248,7 +258,8 @@ def edit_short_video(input_path, folder, words, captions, vertical,
 
 
 def cut_clips(video_path, clips, total, folder, words, captions, vertical,
-              min_d, max_d, count, progress=None):
+              min_d, max_d, count, progress=None, aspect_ratio="9:16",
+              quality="Balanced"):
     results = []
     clean_clips = []
     for c in clips:
@@ -274,7 +285,11 @@ def cut_clips(video_path, clips, total, folder, words, captions, vertical,
     for i, (start, end, c) in enumerate(non_overlapping, 1):
         name = f"clip_{i:02d}.mp4"
         filters = []
-        if vertical:
+        if aspect_ratio == "1:1":
+            filters.append("crop='min(iw,ih)':'min(iw,ih)',scale=1080:1080")
+        elif aspect_ratio == "16:9":
+            filters.append("crop='min(iw,ih*16/9)':'min(ih,iw*9/16)',scale=1280:720")
+        elif vertical:
             filters.append("crop='min(iw,ih*9/16)':'min(ih,iw*16/9)',scale=720:1280")
         if captions:
             ass_name = f"cap_{i:02d}.ass"
@@ -286,8 +301,11 @@ def cut_clips(video_path, clips, total, folder, words, captions, vertical,
         ]
         if filters:
             cmd += ["-vf", ",".join(filters)]
+        preset, crf = {"Fast": ("ultrafast", "28"),
+                       "Balanced": ("veryfast", "24"),
+                       "High quality": ("fast", "20")}.get(quality, ("veryfast", "24"))
         cmd += [
-            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "25", "-threads", "2",
+            "-c:v", "libx264", "-preset", preset, "-crf", crf, "-threads", "2",
             "-c:a", "aac", "-movflags", "+faststart", name,
         ]
         # folder ke andar chalate hain taaki subtitle path me dikkat na aaye
@@ -313,7 +331,13 @@ col1, col2 = st.columns(2)
 count = col1.number_input("Kitne clips?", min_value=1, max_value=30, value=15)
 min_d, max_d = col2.slider("Clip length (seconds)", 10, 90, (20, 60))
 captions = st.checkbox("Video ki boli hui language me captions", value=True)
-vertical = st.checkbox("9:16 vertical (Reels/Shorts)", value=True)
+aspect_ratio = st.selectbox("Output format", ["9:16 (Reels/Shorts)", "1:1 (Square)", "16:9 (YouTube)"])
+aspect_ratio_value = aspect_ratio.split(" ")[0]
+vertical = aspect_ratio_value == "9:16"
+quality = st.selectbox("Export quality", ["Fast", "Balanced", "High quality"], index=1)
+sensitivity = st.select_slider("Highlight selection sensitivity",
+                               options=["Low", "Balanced", "High"], value="Balanced")
+sensitivity_value = {"Low": 0.8, "Balanced": 1.0, "High": 1.2}[sensitivity]
 model_size = st.selectbox(
     "Speech recognition quality",
     ["tiny", "base", "small"],
@@ -372,7 +396,8 @@ if video is not None and st.button("Create Professional Edit" if mode == "Short 
                         music_out.write(music_file.getbuffer())
                 st.session_state["short_edit"] = edit_short_video(
                     input_path, folder, words, captions, vertical,
-                    music_path=music_path, fade=fade_edges, color_preset=color_preset
+                    music_path=music_path, fade=fade_edges, color_preset=color_preset,
+                    aspect_ratio=aspect_ratio_value, quality=quality
                 )
                 st.session_state.pop("results", None)
             else:
@@ -387,11 +412,12 @@ if video is not None and st.button("Create Professional Edit" if mode == "Short 
                 if not transcript.strip():
                     raise ValueError("Video me bolne wali awaaz nahi mili.")
                 with st.spinner("3/3 Automatic highlights aur clips ban rahe hain..."):
-                    picks = pick_clips(transcript, total, count, min_d, max_d)
+                    picks = pick_clips(transcript, total, count, min_d, max_d, sensitivity_value)
                     clip_progress = st.progress(0, text="Clips render ho rahe hain...")
                     results = cut_clips(
                         input_path, picks, total, folder, words, captions, vertical,
-                        min_d, max_d, int(count), clip_progress
+                        min_d, max_d, int(count), clip_progress,
+                        aspect_ratio=aspect_ratio_value, quality=quality
                     )
                     clip_progress.empty()
 
