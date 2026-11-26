@@ -176,7 +176,7 @@ def make_ass(words, start, end, vertical, path):
 def edit_short_video(input_path, folder, words, captions, vertical):
     """Edit the complete short video with captions, normalized audio and light image polish."""
     probe = subprocess.run([FFMPEG, "-i", input_path], capture_output=True, text=True)
-    match = re.search(r"Duration: (\\d+):(\\d+):(\\d+(?:\\.\\d+)?)", probe.stderr)
+    match = re.search(r"Duration: (\d+):(\d+):(\d+(?:\.\d+)?)", probe.stderr)
     if not match:
         raise ValueError("Video duration read nahi ho payi.")
     hh, mm, ss = match.groups()
@@ -259,7 +259,8 @@ def cut_clips(video_path, clips, total, folder, words, captions, vertical,
     return results
 
 
-mode = st.radio("Choose editing mode", ["Long video → Auto Clips", "Short video → Professional Edit"])\nvideo = st.file_uploader("Upload Your Video", type=["mp4", "mov", "mkv"])
+mode = st.radio("Choose editing mode", ["Long video → Auto Clips", "Short video → Professional Edit"])
+video = st.file_uploader("Upload Your Video", type=["mp4", "mov", "mkv"])
 st.caption("Apni video file upload karein. Long videos ka audio 5-minute parts me process hoga. 2–3 ghante ki high-quality file ko hosting ki upload, RAM, CPU aur time limits rok sakti hain.")
 col1, col2 = st.columns(2)
 count = col1.number_input("Kitne clips?", min_value=1, max_value=30, value=15)
@@ -311,7 +312,7 @@ if video is not None and st.button("Create Professional Edit" if mode == "Short 
                     )
                     clip_progress.empty()
 
-        if not results:
+        if mode == "Long video → Auto Clips" and not results:
             raise ValueError("Koi clip nahi bani.")
 
         buf = io.BytesIO()
@@ -328,7 +329,11 @@ if video is not None and st.button("Create Professional Edit" if mode == "Short 
     except Exception as e:
         st.error(f"Error: {e}")
 
-if "short_edit" in st.session_state:\n    st.subheader("Professionally Edited Short")\n    st.video(st.session_state["short_edit"])\n    st.download_button("Download Edited Short", st.session_state["short_edit"], file_name="professionally_edited_short.mp4")\n\n# Results session_state me rakhe hain taaki download dabane par gayab na ho
+if "short_edit" in st.session_state:
+    st.subheader("Professionally Edited Short")\n    st.video(st.session_state["short_edit"])
+    st.download_button("Download Edited Short", st.session_state["short_edit"], file_name="professionally_edited_short.mp4")
+
+# Results session_state me rakhe hain taaki download dabane par gayab na ho
 if "results" in st.session_state:
     for r in st.session_state["results"]:
         st.subheader(r["title"])
