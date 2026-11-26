@@ -231,6 +231,7 @@ def edit_short_video(input_path, folder, words, captions, vertical,
             music_filter += f",afade=t=in:st=0:d=0.35,afade=t=out:st={max(0, duration - 0.45):.3f}:d=0.45"
         music_filter += ",alimiter=limit=0.95[aout]"
         cmd += ["-filter_complex", music_filter, "-map", "0:v:0", "-map", "[aout]"]
+        cmd += ["-t", str(duration)]
     elif has_audio:
         audio_filter = "loudnorm=I=-16:TP=-1.5:LRA=11"
         if fade:
