@@ -187,10 +187,14 @@ def ass_time(t):
     return f"{int(h)}:{int(m):02d}:{sec:05.2f}"
 
 
-def make_ass(words, start, end, vertical, path):
-    """Clip ke words se 3-3 words ke caption (ASS file) banata hai."""
-    w, h = (1080, 1920) if vertical else (1920, 1080)
-    size, margin = (62, 220) if vertical else (48, 60)
+def make_ass(words, start, end, vertical, path, aspect_ratio="9:16"):
+    """Create timed captions with canvas dimensions matching the selected output ratio."""
+    if aspect_ratio == "1:1":
+        w, h, size, margin = 1080, 1080, 46, 110
+    elif aspect_ratio == "16:9":
+        w, h, size, margin = 1920, 1080, 48, 60
+    else:
+        w, h, size, margin = 1080, 1920, 62, 220
     head = (
         f"[Script Info]\nScriptType: v4.00+\nPlayResX: {w}\nPlayResY: {h}\n\n"
         "[V4+ Styles]\n"
@@ -241,7 +245,7 @@ def edit_short_video(input_path, folder, words, captions, vertical,
     else:
         filters.append("scale='min(1280,iw)':-2")
     ass_path = os.path.join(folder, "short_captions.ass")
-    if captions and make_ass(words, 0, duration, vertical, ass_path):
+    if captions and make_ass(words, 0, duration, vertical, ass_path, aspect_ratio):
         filters.append("subtitles=short_captions.ass")
     color = {
         "Natural": "eq=contrast=1.03:saturation=1.06:brightness=0.005",
@@ -333,7 +337,7 @@ def cut_clips(video_path, clips, total, folder, words, captions, vertical,
             filters.append("crop='min(iw,ih*9/16)':'min(ih,iw*16/9)',scale=720:1280")
         if captions:
             ass_name = f"cap_{i:02d}.ass"
-            if make_ass(words, start, end, vertical, os.path.join(folder, ass_name)):
+            if make_ass(words, start, end, vertical, os.path.join(folder, ass_name), aspect_ratio):
                 filters.append(f"subtitles={ass_name}")
         cmd = [
             FFMPEG, "-y", "-ss", str(start), "-i", "input.mp4",
