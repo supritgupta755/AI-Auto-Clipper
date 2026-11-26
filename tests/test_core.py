@@ -137,3 +137,8 @@ def test_highlight_picker_respects_selected_duration_range():
     for clip in clips:
         duration = clip["end"] - clip["start"]
         assert 12 <= duration <= 25
+
+def test_highlight_titles_preserve_original_word_capitalization():
+    transcript = "[0.0-8.0] Welcome To My Amazing Video Today\n"
+    clips = pick_clips(transcript, 30, 1, 10, 15)
+    assert clips[0]["title"].startswith("Welcome To My Amazing")
