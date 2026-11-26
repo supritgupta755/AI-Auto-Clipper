@@ -377,7 +377,12 @@ def cut_clips(video_path, clips, total, folder, words, captions, vertical,
     return results
 
 
-mode = st.radio("Choose editing mode", ["Long video → Auto Clips", "Short video → Professional Edit"])
+mode = st.radio("Choose editing mode", [
+    "Long video → Auto Clips",
+    "Short video → Professional Edit",
+    "Edit full video → No clips (keep entire video)",
+])
+is_full_edit = mode != "Long video → Auto Clips"
 video = st.file_uploader("Upload Your Video", type=["mp4", "mov", "mkv"])
 st.caption("Apni video file upload karein. Long videos ka audio 5-minute parts me process hoga. 2–3 ghante ki high-quality file ko hosting ki upload, RAM, CPU aur time limits rok sakti hain.")
 col1, col2 = st.columns(2)
@@ -400,7 +405,8 @@ model_size = st.selectbox(
 music_file = None
 fade_edges = True
 color_preset = "Natural"
-if mode == "Short video → Professional Edit":
+if is_full_edit:
+    st.info("Full video edit mode: poori uploaded video ek hi edited video ke roop me milegi. Isse chhote clips me split nahi kiya jayega.")
     music_file = st.file_uploader("Optional background music (use audio you have permission to use)", type=["mp3", "wav", "m4a", "aac"])
     fade_edges = st.checkbox("Smooth fade-in / fade-out", value=True)
     color_preset = st.selectbox("Colour style", ["Natural", "Vibrant", "Cinematic"])
@@ -410,7 +416,7 @@ correction_text = st.text_area(
     help="Har line me galat = sahi likhein. Correction transcript aur captions dono par lagega."
 )
 
-if video is not None and st.button("Create Professional Edit" if mode == "Short video → Professional Edit" else "Create AI Clips"):
+if video is not None and st.button("Create Full Video Edit (No Clips)" if is_full_edit else "Create AI Clips"):
     st.session_state.pop("short_edit", None)
     st.session_state.pop("results", None)
     st.session_state.pop("creator_pack", None)
@@ -429,8 +435,8 @@ if video is not None and st.button("Create Professional Edit" if mode == "Short 
                             break
                         output_file.write(chunk)
 
-            if mode == "Short video → Professional Edit":
-                # Clear the previous preview first so a failed new render never shows stale output.
+            if is_full_edit:
+                # Keep the complete uploaded video as one edited output; never run highlight clipping. so a failed new render never shows stale output.
                 st.session_state.pop("short_edit", None)
                 st.session_state.pop("results", None)
                 with st.spinner("Short video edit ban raha hai..."):
@@ -480,10 +486,10 @@ if video is not None and st.button("Create Professional Edit" if mode == "Short 
                     if len(results) < int(count):
                         st.warning(f"Sirf {len(results)} clips mil paaye; requested {int(count)}. Behtar results ke liye clip duration kam karein ya longer video dein.")
 
-        if mode == "Long video → Auto Clips" and not results:
+        if not is_full_edit and not results:
             raise ValueError("Koi clip nahi bani.")
 
-        if mode == "Long video → Auto Clips":
+        if not is_full_edit:
             buf = io.BytesIO()
             with zipfile.ZipFile(buf, "w") as z:
                 for r in results:
