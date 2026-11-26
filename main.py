@@ -295,21 +295,21 @@ if video is not None and st.button("Create Professional Edit" if mode == "Short 
                 st.session_state["short_edit"] = edit_short_video(input_path, folder, words, captions, vertical)
                 st.session_state.pop("results", None)
             else:
-            with st.spinner("2/3 Long video ka audio parts me process ho raha hai..."):
-                audio_progress = st.progress(0, text="Audio processing shuru...")
-                transcript, total, words = transcribe(input_path, folder, audio_progress)\n                transcript, words = apply_word_corrections(transcript, words, correction_text)
-                audio_progress.empty()
-            if not transcript.strip():
-                raise ValueError("Video me bolne wali awaaz nahi mili.")
-
-            with st.spinner("3/3 Automatic highlights aur clips ban rahe hain..."):
-                picks = pick_clips(transcript, total, count, min_d, max_d)
-                clip_progress = st.progress(0, text="Clips render ho rahe hain...")
-                results = cut_clips(
-                    input_path, picks, total, folder, words, captions, vertical,
-                    min_d, max_d, int(count), clip_progress
-                )
-                clip_progress.empty()
+                with st.spinner("2/3 Long video ka audio parts me process ho raha hai..."):
+                    audio_progress = st.progress(0, text="Audio processing shuru...")
+                    transcript, total, words = transcribe(input_path, folder, audio_progress)
+                    transcript, words = apply_word_corrections(transcript, words, correction_text)
+                    audio_progress.empty()
+                if not transcript.strip():
+                    raise ValueError("Video me bolne wali awaaz nahi mili.")
+                with st.spinner("3/3 Automatic highlights aur clips ban rahe hain..."):
+                    picks = pick_clips(transcript, total, count, min_d, max_d)
+                    clip_progress = st.progress(0, text="Clips render ho rahe hain...")
+                    results = cut_clips(
+                        input_path, picks, total, folder, words, captions, vertical,
+                        min_d, max_d, int(count), clip_progress
+                    )
+                    clip_progress.empty()
 
         if not results:
             raise ValueError("Koi clip nahi bani.")
