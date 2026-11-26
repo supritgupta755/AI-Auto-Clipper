@@ -152,7 +152,7 @@ def make_ass(words, start, end, vertical, path):
 
 
 def cut_clips(video_path, clips, total, folder, words, captions, vertical,
-              min_d, max_d, count):
+              min_d, max_d, count, progress=None):
     results = []
     clean_clips = []
     for c in clips:
@@ -205,6 +205,8 @@ def cut_clips(video_path, clips, total, folder, words, captions, vertical,
                 "end": end,
                 "data": f.read(),
             })
+        if progress is not None:
+            progress.progress(i / len(non_overlapping), text=f"Clip {i}/{len(non_overlapping)} ready")
     return results
 
 
@@ -239,10 +241,12 @@ if video is not None and st.button("Create AI Clips"):
 
             with st.spinner("3/3 Automatic highlights aur clips ban rahe hain..."):
                 picks = pick_clips(transcript, total, count, min_d, max_d)
+                clip_progress = st.progress(0, text="Clips render ho rahe hain...")
                 results = cut_clips(
                     input_path, picks, total, folder, words, captions, vertical,
-                    min_d, max_d, int(count)
+                    min_d, max_d, int(count), clip_progress
                 )
+                clip_progress.empty()
 
         if not results:
             raise ValueError("Koi clip nahi bani.")
