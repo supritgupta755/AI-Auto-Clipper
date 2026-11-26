@@ -18,7 +18,8 @@ exec(compile(ast.Module(body=selected, type_ignores=[]), str(SOURCE), "exec"), n
 
 apply_word_corrections = namespace["apply_word_corrections"]
 pick_clips = namespace["pick_clips"]
-make_ass = namespace["make_ass"]\nmake_creator_pack = namespace["make_creator_pack"]
+make_ass = namespace["make_ass"]
+make_creator_pack = namespace["make_creator_pack"]
 edit_short_video = namespace["edit_short_video"]
 FFMPEG = namespace["FFMPEG"]
 
