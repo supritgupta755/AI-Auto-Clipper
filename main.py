@@ -104,7 +104,8 @@ def pick_clips(transcript, total, count, min_d, max_d, sensitivity=1.0):
             continue
         trigger_count = sum(1 for w in selected if w.strip(".,!?।").lower() in triggers)
         reaction_bonus = sum(1 for token in ("!", "?", "।") if token in " ".join(selected))
-        score = (len(selected) + 6 * trigger_count + 1.5 * reaction_bonus) * float(sensitivity)
+        emphasis = float(sensitivity)
+        score = len(selected) + 6 * emphasis * trigger_count + 1.5 * emphasis * reaction_bonus
         candidates.append((score, start, end))
 
     candidates.sort(reverse=True)
