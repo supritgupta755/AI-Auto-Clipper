@@ -126,3 +126,14 @@ def test_short_editor_can_add_music_to_silent_video(tmp_path):
                             music_path=str(music), fade=False, color_preset="Vibrant")
     output = tmp_path / "professionally_edited_short.mp4"
     assert data and output.exists() and "Audio:" in _probe(output)
+
+def test_highlight_picker_respects_selected_duration_range():
+    transcript = (
+        "[0.0-8.0] This is a funny moment haha and everyone is laughing loudly\n"
+        "[30.0-38.0] Another amazing moment that people should watch carefully\n"
+    )
+    clips = pick_clips(transcript, 60, 2, 12, 25, sensitivity=1.2)
+    assert len(clips) == 2
+    for clip in clips:
+        duration = clip["end"] - clip["start"]
+        assert 12 <= duration <= 25
