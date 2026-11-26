@@ -8,7 +8,7 @@ A Streamlit app that creates short clips from a user-uploaded video.
 3. Split extracted audio into 5-minute chunks to reduce peak audio-processing memory.
 4. Select candidate highlights using free transcript-based speech and keyword scoring.
 5. Cut clips with FFmpeg, optionally add word-timed captions, crop to vertical 9:16, and download clips or a ZIP.
-6. Separate short-video editing mode with captions when speech is present, 9:16 crop, audio loudness normalization, optional user-supplied background music mix, fade-in/fade-out, and Natural/Vibrant/Cinematic colour presets. Silent videos can also be edited without captions or source audio.
+6. Separate short-video editing mode with optional speech captions, 9:16 crop, audio loudness normalization, optional user-supplied background music mix, fade-in/fade-out, and Natural/Vibrant/Cinematic colour presets. When captions are switched off, speech recognition is skipped to save processing time. Silent videos can also be edited without captions or source audio.
 7. User-entered spelling corrections are applied case-insensitively to transcript text and caption words.
 
 ## Run locally
@@ -32,4 +32,4 @@ streamlit run main.py
 
 ## Validation
 
-GitHub Actions checks Python syntax. Passing that check is not proof that deployment, large uploads, transcription, or clip rendering work on the live hosting server.
+GitHub Actions checks Python syntax and runs core unit tests, including synthetic FFmpeg rendering checks for silent and audio video inputs. Passing these tests is not proof that deployment, large uploads, transcription, or clip rendering work on the live hosting server.
