@@ -490,9 +490,15 @@ if video is not None and st.button("Create Professional Edit" if mode == "Short 
                     z.writestr(r["name"], r["data"])
                     z.writestr(r["thumbnail_name"], r["thumbnail"])
                 z.writestr("creator_pack.txt", make_creator_pack(results, transcript))
-            st.session_state["results"] = results
+            # Keep only lightweight clip metadata in session state. The ZIP is the
+            # single stored copy of all rendered clips and thumbnails.
+            st.session_state["results"] = [
+                {key: r[key] for key in ("name", "thumbnail_name", "title", "reason", "start", "end")}
+                for r in results
+            ]
             st.session_state["creator_pack"] = make_creator_pack(results, transcript)
             st.session_state["zip"] = buf.getvalue()
+            del results
 
     except subprocess.CalledProcessError as e:
         st.error("FFmpeg error: " + e.stderr.decode(errors="ignore")[-500:])
@@ -506,22 +512,39 @@ if "short_edit" in st.session_state:
 
 # Results session_state me rakhe hain taaki download dabane par gayab na ho
 if "results" in st.session_state:
-    for r in st.session_state["results"]:
-        st.subheader(r["title"])
-        st.caption(f"{r['start']:.0f}s - {r['end']:.0f}s | {r['reason']}")
-        st.image(r["thumbnail"], caption="Auto-selected clip thumbnail", width=320)
-        st.download_button(f"Download thumbnail {r['name']}", r["thumbnail"],
-                           file_name=r["thumbnail_name"], mime="image/jpeg")
-        st.video(r["data"])
-        st.download_button(
-            f"Download {r['name']}", r["data"], file_name=r["name"], key=r["name"]
-        )
+    st.subheader("Your AI Clips")
+    clip_options = [r["name"] for r in st.session_state["results"]]
+    clip_lookup = {r["name"]: r for r in st.session_state["results"]}
+    selected_name = st.selectbox(
+        "Preview one clip at a time",
+        clip_options,
+        format_func=lambda name: clip_lookup[name]["title"][:70] or name
+    )
+    selected = clip_lookup[selected_name]
+    # Read only the selected media from the ZIP, rather than rendering every
+    # full-resolution video and thumbnail on each Streamlit rerun.
+    with zipfile.ZipFile(io.BytesIO(st.session_state["zip"]), "r") as archive:
+        thumbnail_data = archive.read(selected["thumbnail_name"])
+        clip_data = archive.read(selected["name"])
+    st.caption(f"{selected['start']:.0f}s - {selected['end']:.0f}s | {selected['reason']}")
+    st.image(thumbnail_data, caption="Auto-selected clip thumbnail", width=320)
+    st.video(clip_data)
     st.download_button(
-        "Download All Clips + Creator Pack", st.session_state["zip"], file_name="AI_Clips_and_Creator_Pack.zip"
+        "Download This Clip",
+        clip_data,
+        file_name=selected["name"],
+        mime="video/mp4",
+        key=f"download_{selected['name']}"
+    )
+    st.download_button(
+        "Download All Clips + Creator Pack",
+        st.session_state["zip"],
+        file_name="AI_Clips_and_Creator_Pack.zip",
+        mime="application/zip"
     )
     st.download_button(
         "Download Titles, Hooks, Descriptions & Hashtags",
-        st.session_state["creator_pack"], file_name="creator_pack.txt"
+        st.session_state["creator_pack"],
+        file_name="creator_pack.txt",
+        mime="text/plain"
     )
-    
-
