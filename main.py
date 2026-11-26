@@ -343,15 +343,22 @@ if video is not None and st.button("Create Professional Edit" if mode == "Short 
                         output_file.write(chunk)
 
             if mode == "Short video → Professional Edit":
-                with st.spinner("Short video captions aur edit ban rahe hain..."):
-                    if has_audio_stream(input_path):
+                # Clear the previous preview first so a failed new render never shows stale output.
+                st.session_state.pop("short_edit", None)
+                st.session_state.pop("results", None)
+                with st.spinner("Short video edit ban raha hai..."):
+                    source_has_audio = has_audio_stream(input_path)
+                    if source_has_audio and captions:
                         audio_progress = st.progress(0, text="Speech recognition...")
                         transcript, total, words = transcribe(input_path, folder, audio_progress)
                         transcript, words = apply_word_corrections(transcript, words, correction_text)
                         audio_progress.empty()
                     else:
                         transcript, total, words = "", 0.0, []
-                        st.info("Is video me audio track nahi hai. Video edit ho jayega; captions aur voice audio nahi honge.")
+                        if not source_has_audio:
+                            st.info("Is video me audio track nahi hai. Video edit ho jayega; captions aur voice audio nahi honge.")
+                        elif not captions:
+                            st.info("Captions off hain, isliye speech recognition skip ki gayi hai. Original audio safe rahega.")
                 music_path = None
                 if music_file is not None:
                     music_path = os.path.join(folder, "background_music" + os.path.splitext(music_file.name)[1])
