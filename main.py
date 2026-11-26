@@ -381,7 +381,7 @@ if video is not None and st.button("Create Professional Edit" if mode == "Short 
                     raise ValueError("Long video me audio track nahi mila. Speech-based highlights ke liye audio wali video upload karein.")
                 with st.spinner("2/3 Long video ka audio parts me process ho raha hai..."):
                     audio_progress = st.progress(0, text="Audio processing shuru...")
-                    transcript, total, words = transcribe(input_path, folder, audio_progress)
+                    transcript, total, words = transcribe(input_path, folder, audio_progress, model_size)
                     transcript, words = apply_word_corrections(transcript, words, correction_text)
                     audio_progress.empty()
                 if not transcript.strip():
