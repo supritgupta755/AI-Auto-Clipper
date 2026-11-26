@@ -105,6 +105,17 @@ def test_short_editor_renders_video_with_or_without_source_audio(tmp_path, with_
     assert ("Audio:" in output_info) is with_audio
 
 
+@pytest.mark.parametrize("ratio", ["9:16", "1:1", "16:9"])
+def test_short_editor_supports_export_aspect_ratios(tmp_path, ratio):
+    source = _make_test_video(tmp_path, True)
+    data = edit_short_video(str(source), str(tmp_path), [], False, True,
+                            music_path=None, fade=False, color_preset="Natural",
+                            aspect_ratio=ratio, quality="Fast")
+    output = tmp_path / "professionally_edited_short.mp4"
+    assert data and output.exists() and output.stat().st_size > 1000
+    assert "Video:" in _probe(output)
+
+
 def test_short_editor_can_add_music_to_silent_video(tmp_path):
     source = _make_test_video(tmp_path, False)
     music = tmp_path / "background.wav"
