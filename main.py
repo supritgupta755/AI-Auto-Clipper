@@ -123,7 +123,11 @@ def pick_clips(transcript, total, count, min_d, max_d, sensitivity=1.0):
             punctuation_text = " ".join(w for rs, re_, ws in rows if rs < end and re_ > start for w in ws)
             reaction_bonus = sum(punctuation_text.count(mark) for mark in ("!", "?", "।"))
             density = len(selected) / actual_duration
-            score = density * 60 + 4.0 * emphasis * trigger_count + 0.5 * emphasis * reaction_bonus
+            covered_duration = sum(max(0.0, min(re_, end) - max(rs, start))
+                                   for rs, re_, _ in rows if rs < end and re_ > start)
+            silent_gap = max(0.0, actual_duration - min(actual_duration, covered_duration))
+            score = (density * 60 + 4.0 * emphasis * trigger_count
+                     + 0.5 * emphasis * reaction_bonus - 2.0 * silent_gap)
             candidates.append((score, start, end))
 
     candidates.sort(key=lambda item: (item[0], item[2] - item[1]), reverse=True)
