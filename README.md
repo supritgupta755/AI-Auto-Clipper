@@ -8,6 +8,8 @@ A Streamlit app that creates short clips from a user-uploaded video.
 3. Split extracted audio into 5-minute chunks to reduce peak audio-processing memory.
 4. Select candidate highlights using free transcript-based speech and keyword scoring.
 5. Cut clips with FFmpeg, optionally add word-timed captions, crop to vertical 9:16, and download clips or a ZIP.
+6. Separate short-video editing mode with captions, 9:16 crop, audio loudness normalization, optional user-supplied background music mix, fade-in/fade-out, and Natural/Vibrant/Cinematic colour presets.
+7. User-entered spelling corrections are applied case-insensitively to transcript text and caption words.
 
 ## Run locally
 
@@ -24,6 +26,8 @@ streamlit run main.py
 - Five-minute audio chunking reduces audio working-set size, but the uploaded video, transcript, generated clips, CPU time, RAM, disk space, and ZIP can still be large.
 - The repository config requests a 1 GB Streamlit upload limit, but the hosting provider's own limits and available resources still apply. This does not guarantee that a 2–3 hour high-resolution video will upload or finish processing on Streamlit Community Cloud.
 - First-time speech-model download and CPU transcription can take a long time. A real 2–3 hour high-resolution video has not yet been successfully tested end-to-end.
+- The short-video mode is an automated basic polish workflow, not a full professional nonlinear editor: it does not yet provide face tracking, object-aware reframing, automatic scene transitions, sound-effect selection, or semantic visual editing.
+- Background music is optional and must be audio the user has permission to use.
 - Review clips and make sure you have permission to use the source video before publishing.
 
 ## Validation
