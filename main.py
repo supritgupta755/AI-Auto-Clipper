@@ -311,15 +311,24 @@ def cut_clips(video_path, clips, total, folder, words, captions, vertical,
         ]
         # folder ke andar chalate hain taaki subtitle path me dikkat na aaye
         subprocess.run(cmd, check=True, capture_output=True, cwd=folder)
+        thumbnail_name = f"thumbnail_{i:02d}.jpg"
+        subprocess.run([FFMPEG, "-y", "-ss", str((end - start) / 2),
+                        "-i", name, "-frames:v", "1", "-q:v", "2", thumbnail_name],
+                       check=True, capture_output=True, cwd=folder)
         with open(os.path.join(folder, name), "rb") as f:
-            results.append({
-                "name": name,
-                "title": c.get("title", f"Clip {i}"),
-                "reason": c.get("reason", ""),
-                "start": start,
-                "end": end,
-                "data": f.read(),
-            })
+            clip_data = f.read()
+        with open(os.path.join(folder, thumbnail_name), "rb") as f:
+            thumbnail_data = f.read()
+        results.append({
+            "name": name,
+            "thumbnail_name": thumbnail_name,
+            "thumbnail": thumbnail_data,
+            "title": c.get("title", f"Clip {i}"),
+            "reason": c.get("reason", ""),
+            "start": start,
+            "end": end,
+            "data": clip_data,
+        })
         if progress is not None:
             progress.progress(i / len(non_overlapping), text=f"Clip {i}/{len(non_overlapping)} ready")
     return results
@@ -430,6 +439,7 @@ if video is not None and st.button("Create Professional Edit" if mode == "Short 
             with zipfile.ZipFile(buf, "w") as z:
                 for r in results:
                     z.writestr(r["name"], r["data"])
+                    z.writestr(r["thumbnail_name"], r["thumbnail"])
                 z.writestr("creator_pack.txt", make_creator_pack(results, transcript))
             st.session_state["results"] = results
             st.session_state["creator_pack"] = make_creator_pack(results, transcript)
@@ -450,6 +460,9 @@ if "results" in st.session_state:
     for r in st.session_state["results"]:
         st.subheader(r["title"])
         st.caption(f"{r['start']:.0f}s - {r['end']:.0f}s | {r['reason']}")
+        st.image(r["thumbnail"], caption="Auto-selected clip thumbnail", width=320)
+        st.download_button(f"Download thumbnail {r['name']}", r["thumbnail"],
+                           file_name=r["thumbnail_name"], mime="image/jpeg")
         st.video(r["data"])
         st.download_button(
             f"Download {r['name']}", r["data"], file_name=r["name"], key=r["name"]
