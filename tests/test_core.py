@@ -1,21 +1,26 @@
 import ast
 import os
 import re
+import subprocess
 from pathlib import Path
+
+import imageio_ffmpeg
 
 import pytest
 
 
 SOURCE = Path(__file__).resolve().parents[1] / "main.py"
-FUNCTIONS = {"ass_time", "apply_word_corrections", "pick_clips", "make_ass"}
+FUNCTIONS = {"ass_time", "apply_word_corrections", "pick_clips", "make_ass", "edit_short_video"}
 tree = ast.parse(SOURCE.read_text(encoding="utf-8"))
 selected = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in FUNCTIONS]
-namespace = {"os": os, "re": re}
+namespace = {"os": os, "re": re, "subprocess": subprocess, "FFMPEG": imageio_ffmpeg.get_ffmpeg_exe()}
 exec(compile(ast.Module(body=selected, type_ignores=[]), str(SOURCE), "exec"), namespace)
 
 apply_word_corrections = namespace["apply_word_corrections"]
 pick_clips = namespace["pick_clips"]
 make_ass = namespace["make_ass"]
+edit_short_video = namespace["edit_short_video"]
+FFMPEG = namespace["FFMPEG"]
 
 
 def test_spelling_corrections_are_case_insensitive_and_apply_to_words():
@@ -66,3 +71,47 @@ def test_caption_file_contains_timed_dialogue_and_devanagari_font(tmp_path):
     assert "Dialogue:" in content
     assert "नमस्ते" in content
     assert "कैसे" in content
+
+
+def _make_test_video(folder, with_audio):
+    source = folder / "input.mp4"
+    command = [FFMPEG, "-y", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=15:duration=2"]
+    if with_audio:
+        command += ["-f", "lavfi", "-i", "sine=frequency=440:duration=2"]
+    command += ["-c:v", "libx264", "-pix_fmt", "yuv420p"]
+    if with_audio:
+        command += ["-c:a", "aac", "-shortest"]
+    else:
+        command += ["-an"]
+    command.append(str(source))
+    subprocess.run(command, check=True, capture_output=True)
+    return source
+
+
+def _probe(path):
+    result = subprocess.run([FFMPEG, "-i", str(path)], capture_output=True, text=True)
+    return result.stderr
+
+
+@pytest.mark.parametrize("with_audio", [False, True])
+def test_short_editor_renders_video_with_or_without_source_audio(tmp_path, with_audio):
+    source = _make_test_video(tmp_path, with_audio)
+    data = edit_short_video(str(source), str(tmp_path), [], False, True,
+                            music_path=None, fade=False, color_preset="Natural")
+    output = tmp_path / "professionally_edited_short.mp4"
+    assert data and output.exists() and output.stat().st_size > 1000
+    output_info = _probe(output)
+    assert "Video:" in output_info
+    assert ("Audio:" in output_info) is with_audio
+
+
+def test_short_editor_can_add_music_to_silent_video(tmp_path):
+    source = _make_test_video(tmp_path, False)
+    music = tmp_path / "background.wav"
+    subprocess.run([FFMPEG, "-y", "-f", "lavfi", "-i",
+                    "sine=frequency=660:duration=1", str(music)],
+                   check=True, capture_output=True)
+    data = edit_short_video(str(source), str(tmp_path), [], False, True,
+                            music_path=str(music), fade=False, color_preset="Vibrant")
+    output = tmp_path / "professionally_edited_short.mp4"
+    assert data and output.exists() and "Audio:" in _probe(output)
