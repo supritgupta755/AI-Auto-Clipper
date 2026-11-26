@@ -1,4 +1,4 @@
 streamlit
 imageio-ffmpeg
 faster-whisper
-av<19
+av==18.1.0
