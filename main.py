@@ -133,7 +133,7 @@ def make_ass(words, start, end, vertical, path):
         "OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, "
         "ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, "
         "MarginL, MarginR, MarginV, Encoding\n"
-        f"Style: Default,Noto Sans Devanagari,{size},&H00FFFFFF,&H000000FF,&H00000000,"
+        f"Style: Default,Noto Sans Devanagari,{size},&H00FFFFFF,&H0000D7FF,&H00000000,"
         f"&H80000000,1,0,0,0,100,100,0,0,1,5,1,2,60,60,{margin},1\n\n"
         "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, "
         "MarginV, Effect, Text\n"
@@ -142,7 +142,12 @@ def make_ass(words, start, end, vertical, path):
     lines = []
     for i in range(0, len(inside), 3):
         grp = inside[i:i + 3]
-        text = " ".join(g[2] for g in grp).upper().replace("{", "").replace("}", "")
+        karaoke = []
+        for word_start, word_end, word in grp:
+            safe_word = word.replace("{", "").replace("}", "")
+            duration_cs = max(1, int((word_end - word_start) * 100))
+            karaoke.append(f"{{\\kf{duration_cs}}}{safe_word}")
+        text = " ".join(karaoke)
         t0 = grp[0][0] - start
         t1 = grp[-1][1] - start
         lines.append(f"Dialogue: 0,{ass_time(t0)},{ass_time(t1)},Default,,0,0,0,,{text}")
