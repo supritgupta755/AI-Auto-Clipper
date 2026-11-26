@@ -84,7 +84,7 @@ def pick_clips(transcript, total, count, min_d, max_d, sensitivity=1.0):
         match = re.match(r"\\[(\\d+(?:\\.\\d+)?)-(\\d+(?:\\.\\d+)?)\\]\\s*(.*)", line)
         if match:
             start, end = float(match.group(1)), float(match.group(2))
-            words = match.group(3).lower().split()
+            words = match.group(3).split()
             if end > start and words:
                 rows.append((start, end, words))
 
