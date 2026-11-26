@@ -173,8 +173,9 @@ def make_ass(words, start, end, vertical, path):
     return bool(lines)
 
 
-def edit_short_video(input_path, folder, words, captions, vertical):
-    """Edit the complete short video with captions, normalized audio and light image polish."""
+def edit_short_video(input_path, folder, words, captions, vertical,
+                     music_path=None, fade=True, color_preset="Natural"):
+    """Apply practical short-form polish using FFmpeg; no paid API required."""
     probe = subprocess.run([FFMPEG, "-i", input_path], capture_output=True, text=True)
     match = re.search(r"Duration: (\d+):(\d+):(\d+(?:\.\d+)?)", probe.stderr)
     if not match:
@@ -189,12 +190,42 @@ def edit_short_video(input_path, folder, words, captions, vertical):
     ass_path = os.path.join(folder, "short_captions.ass")
     if captions and make_ass(words, 0, duration, vertical, ass_path):
         filters.append("subtitles=short_captions.ass")
-    filters.append("eq=contrast=1.03:saturation=1.06:brightness=0.005")
+    color = {
+        "Natural": "eq=contrast=1.03:saturation=1.06:brightness=0.005",
+        "Vibrant": "eq=contrast=1.08:saturation=1.20:brightness=0.01",
+        "Cinematic": "eq=contrast=1.10:saturation=0.92:brightness=-0.01",
+    }.get(color_preset, "eq=contrast=1.03:saturation=1.06:brightness=0.005")
+    filters.append(color)
+    if fade:
+        filters.extend(["fade=t=in:st=0:d=0.35",
+                        f"fade=t=out:st={max(0, duration - 0.45):.3f}:d=0.45"])
     output_path = os.path.join(folder, "professionally_edited_short.mp4")
-    cmd = [FFMPEG, "-y", "-i", "input.mp4", "-vf", ",".join(filters),
-           "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
-           "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", "-threads", "2",
-           "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", "professionally_edited_short.mp4"]
+    cmd = [FFMPEG, "-y", "-i", "input.mp4"]
+    if music_path:
+        cmd += ["-stream_loop", "-1", "-i", os.path.basename(music_path)]
+    cmd += ["-vf", ",".join(filters)]
+    if music_path:
+        audio_filter = (
+            "[0:a]loudnorm=I=-16:TP=-1.5:LRA=11,volume=1.0[voice];"
+            "[1:a]volume=0.16[music];"
+            "[voice][music]amix=inputs=2:duration=first:dropout_transition=2,"
+            "alimiter=limit=0.95[aout]"
+        )
+        if fade:
+            audio_filter = audio_filter.replace(
+                "alimiter=limit=0.95[aout]",
+                f"afade=t=in:st=0:d=0.35,afade=t=out:st={max(0, duration - 0.45):.3f}:d=0.45,"
+                "alimiter=limit=0.95[aout]"
+            )
+        cmd += ["-filter_complex", audio_filter, "-map", "0:v:0", "-map", "[aout]"]
+    else:
+        audio_filter = "loudnorm=I=-16:TP=-1.5:LRA=11"
+        if fade:
+            audio_filter += f",afade=t=in:st=0:d=0.35,afade=t=out:st={max(0, duration - 0.45):.3f}:d=0.45"
+        cmd += ["-af", audio_filter]
+    cmd += ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", "-threads", "2",
+            "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart",
+            "professionally_edited_short.mp4"]
     subprocess.run(cmd, check=True, capture_output=True, cwd=folder)
     with open(output_path, "rb") as edited:
         return edited.read()
@@ -267,6 +298,13 @@ count = col1.number_input("Kitne clips?", min_value=1, max_value=30, value=15)
 min_d, max_d = col2.slider("Clip length (seconds)", 10, 90, (20, 60))
 captions = st.checkbox("Video ki boli hui language me captions", value=True)
 vertical = st.checkbox("9:16 vertical (Reels/Shorts)", value=True)
+music_file = None
+fade_edges = True
+color_preset = "Natural"
+if mode == "Short video → Professional Edit":
+    music_file = st.file_uploader("Optional background music (use audio you have permission to use)", type=["mp3", "wav", "m4a", "aac"])
+    fade_edges = st.checkbox("Smooth fade-in / fade-out", value=True)
+    color_preset = st.selectbox("Colour style", ["Natural", "Vibrant", "Cinematic"])
 correction_text = st.text_area(
     "Hindi/English spelling corrections (optional)",
     placeholder="गलत शब्द = सही शब्द\\nmispeled = misspelled",
@@ -294,7 +332,17 @@ if video is not None and st.button("Create Professional Edit" if mode == "Short 
                     transcript, total, words = transcribe(input_path, folder, audio_progress)
                     transcript, words = apply_word_corrections(transcript, words, correction_text)
                     audio_progress.empty()
-                st.session_state["short_edit"] = edit_short_video(input_path, folder, words, captions, vertical)
+                if not transcript.strip():
+                    raise ValueError("Video me bolne wali awaaz nahi mili.")
+                music_path = None
+                if music_file is not None:
+                    music_path = os.path.join(folder, "background_music" + os.path.splitext(music_file.name)[1])
+                    with open(music_path, "wb") as music_out:
+                        music_out.write(music_file.getbuffer())
+                st.session_state["short_edit"] = edit_short_video(
+                    input_path, folder, words, captions, vertical,
+                    music_path=music_path, fade=fade_edges, color_preset=color_preset
+                )
                 st.session_state.pop("results", None)
             else:
                 with st.spinner("2/3 Long video ka audio parts me process ho raha hai..."):
@@ -316,14 +364,15 @@ if video is not None and st.button("Create Professional Edit" if mode == "Short 
         if mode == "Long video → Auto Clips" and not results:
             raise ValueError("Koi clip nahi bani.")
 
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w") as z:
-            for r in results:
-                z.writestr(r["name"], r["data"])
-            z.writestr("creator_pack.txt", make_creator_pack(results, transcript))
-        st.session_state["results"] = results
-        st.session_state["creator_pack"] = make_creator_pack(results, transcript)
-        st.session_state["zip"] = buf.getvalue()
+        if mode == "Long video → Auto Clips":
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, "w") as z:
+                for r in results:
+                    z.writestr(r["name"], r["data"])
+                z.writestr("creator_pack.txt", make_creator_pack(results, transcript))
+            st.session_state["results"] = results
+            st.session_state["creator_pack"] = make_creator_pack(results, transcript)
+            st.session_state["zip"] = buf.getvalue()
 
     except subprocess.CalledProcessError as e:
         st.error("FFmpeg error: " + e.stderr.decode(errors="ignore")[-500:])
