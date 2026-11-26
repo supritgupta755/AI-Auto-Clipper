@@ -54,6 +54,23 @@ def transcribe(video_path, folder, progress=None):
     return "\n".join(lines), offset, words
 
 
+def apply_word_corrections(transcript, words, correction_text):
+    """Apply user-confirmed spelling fixes consistently to transcript and captions."""
+    pairs = []
+    for line in correction_text.splitlines():
+        if "=" not in line:
+            continue
+        wrong, right = line.split("=", 1)
+        wrong, right = wrong.strip(), right.strip()
+        if wrong and right:
+            pairs.append((wrong, right))
+    for wrong, right in pairs:
+        transcript = transcript.replace(wrong, right).replace(wrong.lower(), right)
+        words = [(s, e, word.replace(wrong, right).replace(wrong.lower(), right))
+                 for s, e, word in words]
+    return transcript, words
+
+
 def pick_clips(transcript, total, count, min_d, max_d):
     """Free local highlight scoring; no paid API call."""
     rows = []
@@ -222,6 +239,11 @@ count = col1.number_input("Kitne clips?", min_value=1, max_value=30, value=15)
 min_d, max_d = col2.slider("Clip length (seconds)", 10, 90, (20, 60))
 captions = st.checkbox("Video ki boli hui language me captions", value=True)
 vertical = st.checkbox("9:16 vertical (Reels/Shorts)", value=True)
+correction_text = st.text_area(
+    "Hindi/English spelling corrections (optional)",
+    placeholder="गलत शब्द = सही शब्द\\nmispeled = misspelled",
+    help="Har line me galat = sahi likhein. Correction transcript aur captions dono par lagega."
+)
 
 if video is not None and st.button("Create AI Clips"):
     try:
@@ -239,7 +261,7 @@ if video is not None and st.button("Create AI Clips"):
 
             with st.spinner("2/3 Long video ka audio parts me process ho raha hai..."):
                 audio_progress = st.progress(0, text="Audio processing shuru...")
-                transcript, total, words = transcribe(input_path, folder, audio_progress)
+                transcript, total, words = transcribe(input_path, folder, audio_progress)\n                transcript, words = apply_word_corrections(transcript, words, correction_text)
                 audio_progress.empty()
             if not transcript.strip():
                 raise ValueError("Video me bolne wali awaaz nahi mili.")
