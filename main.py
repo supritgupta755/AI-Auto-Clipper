@@ -19,7 +19,7 @@ st.caption("Free mode: speech auto-detect, automatic highlight selection, captio
 
 @st.cache_resource
 def load_whisper():
-    return WhisperModel("base", device="cpu", compute_type="int8")
+    return WhisperModel("tiny", device="cpu", compute_type="int8", cpu_threads=4, num_workers=1)
 
 
 
@@ -42,7 +42,7 @@ def transcribe(video_path, folder, progress=None):
     lines, words, offset = [], [], 0.0
     model = load_whisper()
     for index, wav in enumerate(chunks):
-        segments, info = model.transcribe(wav, language=None, word_timestamps=True)
+        segments, info = model.transcribe(wav, language=None, word_timestamps=True, beam_size=1, best_of=1, vad_filter=True, condition_on_previous_text=False)
         chunk_duration = float(info.duration or 0)
         for seg in segments:
             lines.append(f"[{seg.start + offset:.1f}-{seg.end + offset:.1f}] {seg.text.strip()}")
@@ -125,7 +125,7 @@ def ass_time(t):
 def make_ass(words, start, end, vertical, path):
     """Clip ke words se 3-3 words ke caption (ASS file) banata hai."""
     w, h = (1080, 1920) if vertical else (1920, 1080)
-    size, margin = (74, 260) if vertical else (56, 60)
+    size, margin = (62, 220) if vertical else (48, 60)
     head = (
         f"[Script Info]\nScriptType: v4.00+\nPlayResX: {w}\nPlayResY: {h}\n\n"
         "[V4+ Styles]\n"
@@ -179,7 +179,7 @@ def cut_clips(video_path, clips, total, folder, words, captions, vertical,
         name = f"clip_{i:02d}.mp4"
         filters = []
         if vertical:
-            filters.append("crop='min(iw,ih*9/16)':'min(ih,iw*16/9)',scale=1080:1920")
+            filters.append("crop='min(iw,ih*9/16)':'min(ih,iw*16/9)',scale=720:1280")
         if captions:
             ass_name = f"cap_{i:02d}.ass"
             if make_ass(words, start, end, vertical, os.path.join(folder, ass_name)):
@@ -191,7 +191,7 @@ def cut_clips(video_path, clips, total, folder, words, captions, vertical,
         if filters:
             cmd += ["-vf", ",".join(filters)]
         cmd += [
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "25", "-threads", "2",
             "-c:a", "aac", "-movflags", "+faststart", name,
         ]
         # folder ke andar chalate hain taaki subtitle path me dikkat na aaye
