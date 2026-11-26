@@ -7,7 +7,7 @@ A Streamlit app that creates short clips from a user-uploaded video.
 2. Transcribe speech with Faster-Whisper using automatic language detection and selectable tiny (fast), base (balanced), or small (slower, potentially more accurate) models.
 3. Split extracted audio into 5-minute chunks to reduce peak audio-processing memory.
 4. Select candidate highlights using free transcript-based speech and keyword scoring, with Low / Balanced / High keyword-emphasis sensitivity controls.
-5. Cut clips with FFmpeg, optionally add word-timed captions, crop to vertical 9:16, and download clips, auto-generated JPG thumbnails, or a ZIP.
+5. Cut clips with FFmpeg, optionally add word-timed captions, crop to 9:16 / 1:1 / 16:9, match caption canvas to the selected ratio, and download clips, auto-generated JPG thumbnails, or a ZIP.
 6. Separate short-video editing mode with optional speech captions, selectable 9:16 / 1:1 / 16:9 output, Fast / Balanced / High quality export, audio loudness normalization, optional user-supplied background music mix, fade-in/fade-out, and Natural/Vibrant/Cinematic colour presets. When captions are switched off, speech recognition is skipped to save processing time. Silent videos can also be edited without captions or source audio.
 7. User-entered spelling corrections are applied case-insensitively to transcript text and caption words.
 
