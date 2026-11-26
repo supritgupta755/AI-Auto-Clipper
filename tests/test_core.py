@@ -10,7 +10,7 @@ import pytest
 
 
 SOURCE = Path(__file__).resolve().parents[1] / "main.py"
-FUNCTIONS = {"ass_time", "apply_word_corrections", "pick_clips", "make_ass", "edit_short_video"}
+FUNCTIONS = {"ass_time", "apply_word_corrections", "pick_clips", "make_ass", "make_creator_pack", "edit_short_video"}
 tree = ast.parse(SOURCE.read_text(encoding="utf-8"))
 selected = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in FUNCTIONS]
 namespace = {"os": os, "re": re, "subprocess": subprocess, "FFMPEG": imageio_ffmpeg.get_ffmpeg_exe()}
@@ -18,7 +18,7 @@ exec(compile(ast.Module(body=selected, type_ignores=[]), str(SOURCE), "exec"), n
 
 apply_word_corrections = namespace["apply_word_corrections"]
 pick_clips = namespace["pick_clips"]
-make_ass = namespace["make_ass"]
+make_ass = namespace["make_ass"]\nmake_creator_pack = namespace["make_creator_pack"]
 edit_short_video = namespace["edit_short_video"]
 FFMPEG = namespace["FFMPEG"]
 
@@ -142,3 +142,19 @@ def test_highlight_titles_preserve_original_word_capitalization():
     transcript = "[0.0-8.0] Welcome To My Amazing Video Today\n"
     clips = pick_clips(transcript, 30, 1, 10, 15)
     assert clips[0]["title"].startswith("Welcome To My Amazing")
+
+
+def test_creator_pack_uses_each_clips_own_transcript_segment():
+    transcript = (
+        "[0.0-5.0] First clip says welcome to the show\\n"
+        "[20.0-25.0] Second clip says goodbye and see you tomorrow\\n"
+    )
+    clips = [
+        {"start": 0, "end": 10, "title": "Welcome"},
+        {"start": 18, "end": 30, "title": "Goodbye"},
+    ]
+    pack = make_creator_pack(clips, transcript)
+    sections = pack.split("CLIP ")
+    assert "welcome to the show" in sections[1]
+    assert "goodbye and see you tomorrow" in sections[2]
+    assert "welcome to the show" not in sections[2]
