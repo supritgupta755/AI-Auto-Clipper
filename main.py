@@ -28,6 +28,12 @@ def run(cmd):
     subprocess.run(cmd, check=True, capture_output=True)
 
 
+
+def has_audio_stream(video_path):
+    """Return whether FFmpeg detects an audio stream in the uploaded video."""
+    probe = subprocess.run([FFMPEG, "-i", video_path], capture_output=True, text=True)
+    return bool(re.search(r"Stream #.*Audio:", probe.stderr))
+
 def transcribe(video_path, folder, progress=None):
     # Split long-video audio into 5-minute WAV chunks to reduce peak memory use.
     chunk_dir = os.path.join(folder, "audio_chunks")
@@ -204,7 +210,8 @@ def edit_short_video(input_path, folder, words, captions, vertical,
     if music_path:
         cmd += ["-stream_loop", "-1", "-i", os.path.basename(music_path)]
     cmd += ["-vf", ",".join(filters)]
-    if music_path:
+    has_audio = bool(re.search(r"Stream #.*Audio:", probe.stderr))
+    if music_path and has_audio:
         audio_filter = (
             "[0:a]loudnorm=I=-16:TP=-1.5:LRA=11,volume=1.0[voice];"
             "[1:a]volume=0.16[music];"
@@ -218,11 +225,19 @@ def edit_short_video(input_path, folder, words, captions, vertical,
                 "alimiter=limit=0.95[aout]"
             )
         cmd += ["-filter_complex", audio_filter, "-map", "0:v:0", "-map", "[aout]"]
-    else:
+    elif music_path and not has_audio:
+        music_filter = "[1:a]volume=0.16"
+        if fade:
+            music_filter += f",afade=t=in:st=0:d=0.35,afade=t=out:st={max(0, duration - 0.45):.3f}:d=0.45"
+        music_filter += ",alimiter=limit=0.95[aout]"
+        cmd += ["-filter_complex", music_filter, "-map", "0:v:0", "-map", "[aout]"]
+    elif has_audio:
         audio_filter = "loudnorm=I=-16:TP=-1.5:LRA=11"
         if fade:
             audio_filter += f",afade=t=in:st=0:d=0.35,afade=t=out:st={max(0, duration - 0.45):.3f}:d=0.45"
         cmd += ["-af", audio_filter]
+    else:
+        cmd += ["-an"]
     cmd += ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", "-threads", "2",
             "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart",
             "professionally_edited_short.mp4"]
@@ -328,12 +343,14 @@ if video is not None and st.button("Create Professional Edit" if mode == "Short 
 
             if mode == "Short video → Professional Edit":
                 with st.spinner("Short video captions aur edit ban rahe hain..."):
-                    audio_progress = st.progress(0, text="Speech recognition...")
-                    transcript, total, words = transcribe(input_path, folder, audio_progress)
-                    transcript, words = apply_word_corrections(transcript, words, correction_text)
-                    audio_progress.empty()
-                if not transcript.strip():
-                    raise ValueError("Video me bolne wali awaaz nahi mili.")
+                    if has_audio_stream(input_path):
+                        audio_progress = st.progress(0, text="Speech recognition...")
+                        transcript, total, words = transcribe(input_path, folder, audio_progress)
+                        transcript, words = apply_word_corrections(transcript, words, correction_text)
+                        audio_progress.empty()
+                    else:
+                        transcript, total, words = "", 0.0, []
+                        st.info("Is video me audio track nahi hai. Video edit ho jayega; captions aur voice audio nahi honge.")
                 music_path = None
                 if music_file is not None:
                     music_path = os.path.join(folder, "background_music" + os.path.splitext(music_file.name)[1])
@@ -346,6 +363,8 @@ if video is not None and st.button("Create Professional Edit" if mode == "Short 
                 st.session_state.pop("results", None)
             else:
                 st.session_state.pop("short_edit", None)
+                if not has_audio_stream(input_path):
+                    raise ValueError("Long video me audio track nahi mila. Speech-based highlights ke liye audio wali video upload karein.")
                 with st.spinner("2/3 Long video ka audio parts me process ho raha hai..."):
                     audio_progress = st.progress(0, text="Audio processing shuru...")
                     transcript, total, words = transcribe(input_path, folder, audio_progress)
