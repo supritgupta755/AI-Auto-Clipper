@@ -161,13 +161,13 @@ def test_creator_pack_uses_each_clips_own_transcript_segment():
     assert "welcome to the show" not in sections[2]
 
 @pytest.mark.parametrize(
-    "ratio,expected_canvas",
-    [("9:16", "PlayResX: 1080\\nPlayResY: 1920"),
-     ("1:1", "PlayResX: 1080\\nPlayResY: 1080"),
-     ("16:9", "PlayResX: 1920\\nPlayResY: 1080")],
+    "ratio,width,height",
+    [("9:16", 1080, 1920), ("1:1", 1080, 1080), ("16:9", 1920, 1080)],
 )
-def test_caption_canvas_matches_export_aspect_ratio(tmp_path, ratio, expected_canvas):
+def test_caption_canvas_matches_export_aspect_ratio(tmp_path, ratio, width, height):
     output = tmp_path / "ratio_captions.ass"
     assert make_ass([(0.1, 0.5, "Test")], 0, 2, ratio == "9:16",
                     str(output), aspect_ratio=ratio)
-    assert expected_canvas in output.read_text(encoding="utf-8")
+    content = output.read_text(encoding="utf-8")
+    assert f"PlayResX: {width}" in content
+    assert f"PlayResY: {height}" in content
