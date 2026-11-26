@@ -379,23 +379,28 @@ def cut_clips(video_path, clips, total, folder, words, captions, vertical,
 
 mode = st.radio("Choose editing mode", [
     "Long video → Auto Clips",
-    "Short video → Professional Edit",
-    "Edit full video → No clips (keep entire video)",
+    "Full video → Professional Edit (No clips)",
 ])
-is_full_edit = mode != "Long video → Auto Clips"
+is_full_edit = mode == "Full video → Professional Edit (No clips)"
 video = st.file_uploader("Upload Your Video", type=["mp4", "mov", "mkv"])
-st.caption("Apni video file upload karein. Long videos ka audio 5-minute parts me process hoga. 2–3 ghante ki high-quality file ko hosting ki upload, RAM, CPU aur time limits rok sakti hain.")
-col1, col2 = st.columns(2)
-count = col1.number_input("Kitne clips?", min_value=1, max_value=30, value=15)
-min_d, max_d = col2.slider("Clip length (seconds)", 10, 90, (20, 60))
+st.caption("Full video edit mode me 2 minute, 3 minute ya usse lambi video bhi ek hi complete video ke roop me edit hogi—koi highlight clips nahi niklenge. Bahut badi files par Streamlit hosting limits lagu ho sakti hain.")
+if not is_full_edit:
+    col1, col2 = st.columns(2)
+    count = col1.number_input("Kitne clips?", min_value=1, max_value=30, value=15)
+    min_d, max_d = col2.slider("Clip length (seconds)", 10, 90, (20, 60))
 captions = st.checkbox("Video ki boli hui language me captions", value=True)
-aspect_ratio = st.selectbox("Output format", ["9:16 (Reels/Shorts)", "1:1 (Square)", "16:9 (YouTube)"])
-aspect_ratio_value = aspect_ratio.split(" ")[0]
+aspect_ratio = st.selectbox(
+    "Output format",
+    ["Original (keep full frame)", "9:16 (Reels/Shorts)", "1:1 (Square)", "16:9 (YouTube)"],
+    index=0 if is_full_edit else 1,
+)
+aspect_ratio_value = "original" if aspect_ratio.startswith("Original") else aspect_ratio.split(" ")[0]
 vertical = aspect_ratio_value == "9:16"
 quality = st.selectbox("Export quality", ["Fast", "Balanced", "High quality"], index=1)
-sensitivity = st.select_slider("Highlight selection sensitivity",
-                               options=["Low", "Balanced", "High"], value="Balanced")
-sensitivity_value = {"Low": 0.8, "Balanced": 1.0, "High": 1.2}[sensitivity]
+if not is_full_edit:
+    sensitivity = st.select_slider("Highlight selection sensitivity",
+                                   options=["Low", "Balanced", "High"], value="Balanced")
+    sensitivity_value = {"Low": 0.8, "Balanced": 1.0, "High": 1.2}[sensitivity]
 model_size = st.selectbox(
     "Speech recognition quality",
     ["tiny", "base", "small"],
@@ -439,7 +444,7 @@ if video is not None and st.button("Create Full Video Edit (No Clips)" if is_ful
                 # Keep the complete uploaded video as one edited output; never run highlight clipping. so a failed new render never shows stale output.
                 st.session_state.pop("short_edit", None)
                 st.session_state.pop("results", None)
-                with st.spinner("Short video edit ban raha hai..."):
+                with st.spinner("Puri video edit ho rahi hai..."):
                     source_has_audio = has_audio_stream(input_path)
                     if source_has_audio and captions:
                         audio_progress = st.progress(0, text="Speech recognition...")
