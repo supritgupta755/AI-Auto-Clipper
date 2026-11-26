@@ -274,6 +274,7 @@ correction_text = st.text_area(
 )
 
 if video is not None and st.button("Create Professional Edit" if mode == "Short video → Professional Edit" else "Create AI Clips"):
+    results = []
     try:
         with tempfile.TemporaryDirectory() as folder:
             input_path = os.path.join(folder, "input.mp4")
@@ -330,7 +331,8 @@ if video is not None and st.button("Create Professional Edit" if mode == "Short 
         st.error(f"Error: {e}")
 
 if "short_edit" in st.session_state:
-    st.subheader("Professionally Edited Short")\n    st.video(st.session_state["short_edit"])
+    st.subheader("Professionally Edited Short")
+    st.video(st.session_state["short_edit"])
     st.download_button("Download Edited Short", st.session_state["short_edit"], file_name="professionally_edited_short.mp4")
 
 # Results session_state me rakhe hain taaki download dabane par gayab na ho
