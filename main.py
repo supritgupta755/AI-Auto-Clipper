@@ -173,6 +173,33 @@ def make_ass(words, start, end, vertical, path):
     return bool(lines)
 
 
+def edit_short_video(input_path, folder, words, captions, vertical):
+    """Edit the complete short video with captions, normalized audio and light image polish."""
+    probe = subprocess.run([FFMPEG, "-i", input_path], capture_output=True, text=True)
+    match = re.search(r"Duration: (\\d+):(\\d+):(\\d+(?:\\.\\d+)?)", probe.stderr)
+    if not match:
+        raise ValueError("Video duration read nahi ho payi.")
+    hh, mm, ss = match.groups()
+    duration = int(hh) * 3600 + int(mm) * 60 + float(ss)
+    filters = []
+    if vertical:
+        filters.append("crop='min(iw,ih*9/16)':'min(ih,iw*16/9)',scale=720:1280")
+    else:
+        filters.append("scale='min(1280,iw)':-2")
+    ass_path = os.path.join(folder, "short_captions.ass")
+    if captions and make_ass(words, 0, duration, vertical, ass_path):
+        filters.append("subtitles=short_captions.ass")
+    filters.append("eq=contrast=1.03:saturation=1.06:brightness=0.005")
+    output_path = os.path.join(folder, "professionally_edited_short.mp4")
+    cmd = [FFMPEG, "-y", "-i", "input.mp4", "-vf", ",".join(filters),
+           "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
+           "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", "-threads", "2",
+           "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", "professionally_edited_short.mp4"]
+    subprocess.run(cmd, check=True, capture_output=True, cwd=folder)
+    with open(output_path, "rb") as edited:
+        return edited.read()
+
+
 def cut_clips(video_path, clips, total, folder, words, captions, vertical,
               min_d, max_d, count, progress=None):
     results = []
@@ -232,7 +259,7 @@ def cut_clips(video_path, clips, total, folder, words, captions, vertical,
     return results
 
 
-video = st.file_uploader("Upload Your Video", type=["mp4", "mov", "mkv"])
+mode = st.radio("Choose editing mode", ["Long video → Auto Clips", "Short video → Professional Edit"])\nvideo = st.file_uploader("Upload Your Video", type=["mp4", "mov", "mkv"])
 st.caption("Apni video file upload karein. Long videos ka audio 5-minute parts me process hoga. 2–3 ghante ki high-quality file ko hosting ki upload, RAM, CPU aur time limits rok sakti hain.")
 col1, col2 = st.columns(2)
 count = col1.number_input("Kitne clips?", min_value=1, max_value=30, value=15)
@@ -245,7 +272,7 @@ correction_text = st.text_area(
     help="Har line me galat = sahi likhein. Correction transcript aur captions dono par lagega."
 )
 
-if video is not None and st.button("Create AI Clips"):
+if video is not None and st.button("Create Professional Edit" if mode == "Short video → Professional Edit" else "Create AI Clips"):
     try:
         with tempfile.TemporaryDirectory() as folder:
             input_path = os.path.join(folder, "input.mp4")
@@ -259,6 +286,15 @@ if video is not None and st.button("Create AI Clips"):
                             break
                         output_file.write(chunk)
 
+            if mode == "Short video → Professional Edit":
+                with st.spinner("Short video captions aur edit ban rahe hain..."):
+                    audio_progress = st.progress(0, text="Speech recognition...")
+                    transcript, total, words = transcribe(input_path, folder, audio_progress)
+                    transcript, words = apply_word_corrections(transcript, words, correction_text)
+                    audio_progress.empty()
+                st.session_state["short_edit"] = edit_short_video(input_path, folder, words, captions, vertical)
+                st.session_state.pop("results", None)
+            else:
             with st.spinner("2/3 Long video ka audio parts me process ho raha hai..."):
                 audio_progress = st.progress(0, text="Audio processing shuru...")
                 transcript, total, words = transcribe(input_path, folder, audio_progress)\n                transcript, words = apply_word_corrections(transcript, words, correction_text)
@@ -292,7 +328,7 @@ if video is not None and st.button("Create AI Clips"):
     except Exception as e:
         st.error(f"Error: {e}")
 
-# Results session_state me rakhe hain taaki download dabane par gayab na ho
+if "short_edit" in st.session_state:\n    st.subheader("Professionally Edited Short")\n    st.video(st.session_state["short_edit"])\n    st.download_button("Download Edited Short", st.session_state["short_edit"], file_name="professionally_edited_short.mp4")\n\n# Results session_state me rakhe hain taaki download dabane par gayab na ho
 if "results" in st.session_state:
     for r in st.session_state["results"]:
         st.subheader(r["title"])
