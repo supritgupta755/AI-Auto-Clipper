@@ -18,8 +18,8 @@ st.caption("Free mode: speech auto-detect, automatic highlight selection, captio
 
 
 @st.cache_resource
-def load_whisper():
-    return WhisperModel("tiny", device="cpu", compute_type="int8", cpu_threads=4, num_workers=1)
+def load_whisper(model_size):
+    return WhisperModel(model_size, device="cpu", compute_type="int8", cpu_threads=4, num_workers=1)
 
 
 
@@ -34,7 +34,7 @@ def has_audio_stream(video_path):
     probe = subprocess.run([FFMPEG, "-i", video_path], capture_output=True, text=True)
     return bool(re.search(r"Stream #.*Audio:", probe.stderr))
 
-def transcribe(video_path, folder, progress=None):
+def transcribe(video_path, folder, progress=None, model_size="tiny"):
     # Split long-video audio into 5-minute WAV chunks to reduce peak memory use.
     chunk_dir = os.path.join(folder, "audio_chunks")
     os.makedirs(chunk_dir, exist_ok=True)
@@ -46,7 +46,7 @@ def transcribe(video_path, folder, progress=None):
     if not chunks:
         raise ValueError("Video se audio nahi nikal paya.")
     lines, words, offset = [], [], 0.0
-    model = load_whisper()
+    model = load_whisper(model_size)
     for index, wav in enumerate(chunks):
         segments, info = model.transcribe(wav, language=None, word_timestamps=True, beam_size=1, best_of=1, vad_filter=True, condition_on_previous_text=False)
         chunk_duration = float(info.duration or 0)
@@ -314,6 +314,12 @@ count = col1.number_input("Kitne clips?", min_value=1, max_value=30, value=15)
 min_d, max_d = col2.slider("Clip length (seconds)", 10, 90, (20, 60))
 captions = st.checkbox("Video ki boli hui language me captions", value=True)
 vertical = st.checkbox("9:16 vertical (Reels/Shorts)", value=True)
+model_size = st.selectbox(
+    "Speech recognition quality",
+    ["tiny", "base", "small"],
+    index=0,
+    help="tiny sabse fast hai; base balanced hai; small zyada accurate ho sakta hai lekin CPU par kaafi slow hoga."
+)
 music_file = None
 fade_edges = True
 color_preset = "Natural"
@@ -350,7 +356,7 @@ if video is not None and st.button("Create Professional Edit" if mode == "Short 
                     source_has_audio = has_audio_stream(input_path)
                     if source_has_audio and captions:
                         audio_progress = st.progress(0, text="Speech recognition...")
-                        transcript, total, words = transcribe(input_path, folder, audio_progress)
+                        transcript, total, words = transcribe(input_path, folder, audio_progress, model_size)
                         transcript, words = apply_word_corrections(transcript, words, correction_text)
                         audio_progress.empty()
                     else:
