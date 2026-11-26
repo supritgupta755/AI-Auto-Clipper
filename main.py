@@ -81,7 +81,7 @@ def pick_clips(transcript, total, count, min_d, max_d, sensitivity=1.0):
     """Choose varied, non-overlapping speech highlights within the requested duration range."""
     rows = []
     for line in transcript.splitlines():
-        match = re.match(r"\\[(\\d+(?:\\.\\d+)?)-(\\d+(?:\\.\\d+)?)\\]\\s*(.*)", line)
+        match = re.match(r"\[(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)\]\s*(.*)", line)
         if match:
             start, end = float(match.group(1)), float(match.group(2))
             words = match.group(3).split()
