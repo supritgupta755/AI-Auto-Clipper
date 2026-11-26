@@ -104,7 +104,7 @@ def pick_clips(transcript, total, count, min_d, max_d):
 
 def make_creator_pack(clips, transcript):
     """Create editable, transcript-based publishing suggestions without a paid API."""
-    clean = re.sub(r"\\s+", " ", transcript).strip()
+    clean = re.sub(r"\s+", " ", transcript).strip()
     sample = clean[:240]
     lines = ["AI AUTO CLIPPER - CREATOR PACK", "", "Note: Suggestions are generated from speech text only. Verify facts and edit before publishing.", ""]
     for i, clip in enumerate(clips, 1):
@@ -112,7 +112,7 @@ def make_creator_pack(clips, transcript):
         lines.extend([f"CLIP {i}", f"Title idea: {title}", f"Hook idea: {title}",
                       f"Description: A short highlight from the original video. {sample}",
                       "Hashtags: #shorts #reels #highlights #clips", ""])
-    return "\\n".join(lines)
+    return "\n".join(lines)
 
 
 def ass_time(t):
