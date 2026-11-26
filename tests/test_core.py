@@ -147,8 +147,8 @@ def test_highlight_titles_preserve_original_word_capitalization():
 
 def test_creator_pack_uses_each_clips_own_transcript_segment():
     transcript = (
-        "[0.0-5.0] First clip says welcome to the show\\n"
-        "[20.0-25.0] Second clip says goodbye and see you tomorrow\\n"
+        "[0.0-5.0] First clip says welcome to the show\n"
+        "[20.0-25.0] Second clip says goodbye and see you tomorrow\n"
     )
     clips = [
         {"start": 0, "end": 10, "title": "Welcome"},
