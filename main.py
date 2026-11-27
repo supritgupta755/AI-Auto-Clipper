@@ -388,7 +388,7 @@ if not is_full_edit:
     col1, col2 = st.columns(2)
     count = col1.number_input("Kitne clips?", min_value=1, max_value=30, value=15)
     min_d, max_d = col2.slider("Clip length (seconds)", 10, 90, (20, 60))
-captions = st.checkbox("Video ki boli hui language me captions", value=True)
+captions = st.checkbox("Video ki boli hui language me captions", value=not is_full_edit, key=f"captions_{mode}")
 aspect_ratio = st.selectbox(
     "Output format",
     ["Original (keep full frame)", "9:16 (Reels/Shorts)", "1:1 (Square)", "16:9 (YouTube)"],
@@ -396,7 +396,7 @@ aspect_ratio = st.selectbox(
 )
 aspect_ratio_value = "original" if aspect_ratio.startswith("Original") else aspect_ratio.split(" ")[0]
 vertical = aspect_ratio_value == "9:16"
-quality = st.selectbox("Export quality", ["Fast", "Balanced", "High quality"], index=1)
+quality = st.selectbox("Export quality", ["Fast", "Balanced", "High quality"], index=0 if is_full_edit else 1, key=f"quality_{mode}")
 if not is_full_edit:
     sensitivity = st.select_slider("Highlight selection sensitivity",
                                    options=["Low", "Balanced", "High"], value="Balanced")
@@ -448,9 +448,15 @@ if video is not None and st.button("Create Full Video Edit (No Clips)" if is_ful
                     source_has_audio = has_audio_stream(input_path)
                     if source_has_audio and captions:
                         audio_progress = st.progress(0, text="Speech recognition...")
-                        transcript, total, words = transcribe(input_path, folder, audio_progress, model_size)
-                        transcript, words = apply_word_corrections(transcript, words, correction_text)
-                        audio_progress.empty()
+                        try:
+                            transcript, total, words = transcribe(input_path, folder, audio_progress, model_size)
+                            transcript, words = apply_word_corrections(transcript, words, correction_text)
+                        except Exception as speech_error:
+                            transcript, total, words = "", 0.0, []
+                            captions = False
+                            st.warning(f"Captions generate nahi ho paaye; poori video bina captions ke edit ki ja rahi hai. Details: {speech_error}")
+                        finally:
+                            audio_progress.empty()
                     else:
                         transcript, total, words = "", 0.0, []
                         if not source_has_audio:
@@ -462,11 +468,15 @@ if video is not None and st.button("Create Full Video Edit (No Clips)" if is_ful
                     music_path = os.path.join(folder, "background_music" + os.path.splitext(music_file.name)[1])
                     with open(music_path, "wb") as music_out:
                         music_out.write(music_file.getbuffer())
-                st.session_state["short_edit"] = edit_short_video(
+                edited_bytes = edit_short_video(
                     input_path, folder, words, captions, vertical,
                     music_path=music_path, fade=fade_edges, color_preset=color_preset,
                     aspect_ratio=aspect_ratio_value, quality=quality
                 )
+                if not edited_bytes or len(edited_bytes) < 1024:
+                    raise ValueError("Edited video file empty ya incomplete hai. Please dobara try karein.")
+                st.session_state["short_edit"] = edited_bytes
+                st.session_state["short_edit_size"] = len(edited_bytes)
                 st.session_state.pop("results", None)
             else:
                 st.session_state.pop("short_edit", None)
@@ -517,9 +527,18 @@ if video is not None and st.button("Create Full Video Edit (No Clips)" if is_ful
         st.error(f"Error: {e}")
 
 if "short_edit" in st.session_state:
-    st.subheader("Professionally Edited Short")
-    st.video(st.session_state["short_edit"])
-    st.download_button("Download Edited Short", st.session_state["short_edit"], file_name="professionally_edited_short.mp4")
+    st.subheader("Your Full Edited Video")
+    st.success("Puri video edit ho gayi hai. Download button dabakar MP4 save karein.")
+    st.caption(f"File size: {st.session_state.get('short_edit_size', len(st.session_state['short_edit'])) / (1024 * 1024):.2f} MB")
+    st.download_button(
+        "Download Full Edited Video",
+        data=io.BytesIO(st.session_state["short_edit"]),
+        file_name="full_video_professionally_edited.mp4",
+        mime="video/mp4",
+        key="download_full_video_edit",
+    )
+    if st.checkbox("Preview video (optional)", key="preview_full_video_edit"):
+        st.video(st.session_state["short_edit"])
 
 # Results session_state me rakhe hain taaki download dabane par gayab na ho
 if "results" in st.session_state:
