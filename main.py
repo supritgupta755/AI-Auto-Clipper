@@ -507,6 +507,7 @@ if video is not None and st.button("Create Full Video Edit (No Clips)" if is_ful
                     )
                     clip_progress.empty()
                     if len(results) < int(count):
+                        st.warning(f"Requested {int(count)} clips, but only {len(results)} valid non-overlapping clips could be created. Video duration or usable speech may be insufficient.")
                         st.warning(f"Sirf {len(results)} clips mil paaye; requested {int(count)}. Behtar results ke liye clip duration kam karein ya longer video dein.")
 
         if not is_full_edit and not results:
