@@ -40,12 +40,14 @@ def transcribe(video_path, folder, progress=None, model_size="tiny"):
     os.makedirs(chunk_dir, exist_ok=True)
     pattern = os.path.join(chunk_dir, "audio_%03d.wav")
     run([FFMPEG, "-y", "-i", video_path, "-vn", "-ac", "1", "-ar", "16000",
-         "-c:a", "pcm_s16le", "-f", "segment", "-segment_time", "300",
+         "-c:a", "pcm_s16le", "-f", "segment", "-segment_time", "30",
          "-reset_timestamps", "1", pattern])
     chunks = sorted(os.path.join(chunk_dir, n) for n in os.listdir(chunk_dir) if n.endswith(".wav"))
     if not chunks:
         raise ValueError("Video se audio nahi nikal paya.")
     lines, words, offset = [], [], 0.0
+    if progress is not None:
+        progress.progress(0.01, text="Speech model load ho raha hai...")
     model = load_whisper(model_size)
     for index, wav in enumerate(chunks):
         segments, info = model.transcribe(wav, language=None, word_timestamps=True, beam_size=1, best_of=1, vad_filter=True, condition_on_previous_text=False)
@@ -383,7 +385,7 @@ mode = st.radio("Choose editing mode", [
 ])
 is_full_edit = mode == "Full video → Professional Edit (No clips)"
 video = st.file_uploader("Upload Your Video", type=["mp4", "mov", "mkv"])
-st.caption("Full video edit mode me 2 minute, 3 minute ya usse lambi video bhi ek hi complete video ke roop me edit hogi—koi highlight clips nahi niklenge. Bahut badi files par Streamlit hosting limits lagu ho sakti hain.")
+st.caption("Full video edit mode me poori video ek hi file rahegi—koi highlight clips nahi niklenge. Fast edit ke liye captions OFF rakhein; captions ON hone par speech recognition ko samay lag sakta hai. Bahut badi files par Streamlit hosting limits lagu ho sakti hain.")
 if not is_full_edit:
     col1, col2 = st.columns(2)
     count = col1.number_input("Kitne clips?", min_value=1, max_value=30, value=15)
