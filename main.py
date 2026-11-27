@@ -532,12 +532,16 @@ if "short_edit" in st.session_state:
     st.subheader("Your Full Edited Video")
     st.success("Puri video edit ho gayi hai. Download button dabakar MP4 save karein.")
     st.caption(f"File size: {st.session_state.get('short_edit_size', len(st.session_state['short_edit'])) / (1024 * 1024):.2f} MB")
+    edited_video_data = st.session_state["short_edit"]
     st.download_button(
-        "Download Full Edited Video",
-        data=io.BytesIO(st.session_state["short_edit"]),
+        label="Download Full Edited Video",
+        data=edited_video_data,
         file_name="full_video_professionally_edited.mp4",
         mime="video/mp4",
         key="download_full_video_edit",
+        on_click="ignore",
+        type="primary",
+        help="Download shuru hone par app rerun nahi hoga; download ko complete hone dein.",
     )
     if st.checkbox("Preview video (optional)", key="preview_full_video_edit"):
         st.video(st.session_state["short_edit"])
