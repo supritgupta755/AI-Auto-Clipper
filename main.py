@@ -19,7 +19,7 @@ st.caption("Free mode: speech auto-detect, automatic highlight selection, captio
 
 @st.cache_resource
 def load_whisper(model_size):
-    return WhisperModel(model_size, device="cpu", compute_type="int8", cpu_threads=4, num_workers=1)
+    return WhisperModel(model_size, device="cpu", compute_type="int8", cpu_threads=2, num_workers=1)
 
 
 
@@ -50,7 +50,7 @@ def transcribe(video_path, folder, progress=None, model_size="tiny"):
         progress.progress(0.01, text="Speech model load ho raha hai...")
     model = load_whisper(model_size)
     for index, wav in enumerate(chunks):
-        segments, info = model.transcribe(wav, language=None, word_timestamps=True, beam_size=1, best_of=1, vad_filter=True, condition_on_previous_text=False)
+        segments, info = model.transcribe(wav, language=None, word_timestamps=True, beam_size=1, best_of=1, vad_filter=False, condition_on_previous_text=False)
         chunk_duration = float(info.duration or 0)
         for seg in segments:
             lines.append(f"[{seg.start + offset:.1f}-{seg.end + offset:.1f}] {seg.text.strip()}")
@@ -390,7 +390,7 @@ if not is_full_edit:
     col1, col2 = st.columns(2)
     count = col1.number_input("Kitne clips?", min_value=1, max_value=30, value=15)
     min_d, max_d = col2.slider("Clip length (seconds)", 10, 90, (20, 60))
-captions = st.checkbox("Video ki boli hui language me captions", value=not is_full_edit, key=f"captions_{mode}")
+captions = st.checkbox("Generate captions (Full Video mode me slow ho sakta hai)" if is_full_edit else "Video ki boli hui language me captions", value=not is_full_edit, key="captions_full_v2" if is_full_edit else "captions_clips")
 aspect_ratio = st.selectbox(
     "Output format",
     ["Original (keep full frame)", "9:16 (Reels/Shorts)", "1:1 (Square)", "16:9 (YouTube)"],
