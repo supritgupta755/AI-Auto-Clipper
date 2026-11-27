@@ -108,7 +108,13 @@ def pick_clips(transcript, total, count, min_d, max_d, sensitivity=1.0):
     emphasis = max(0.0, float(sensitivity))
     candidates = []
     seen = set()
-    for start, _, _ in rows:
+    # Build candidates across the full timeline, not only at Whisper segment
+    # boundaries. Sparse/long speech segments must not silently reduce the
+    # number of clips requested by the user.
+    step = max(1, int(min_d / 2))
+    candidate_starts = {start for start, _, _ in rows}
+    candidate_starts.update(float(t) for t in range(0, max(1, int(total)), step))
+    for start in sorted(candidate_starts):
         for requested_duration in durations:
             end = min(float(total), start + requested_duration)
             actual_duration = end - start
